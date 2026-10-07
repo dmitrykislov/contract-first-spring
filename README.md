@@ -14,7 +14,7 @@ This repository contains:
 |---|------|--------------|
 | 🧱 | **Two small libraries** you add as dependencies: `contract-first-client-support` (runtime for generated clients: authentication, retries, correlation ids, error mapping) and `contract-first-test-support` (validate any HTTP exchange against any OpenAPI document) | Everything that is not specific to one API lives here, so onboarding a new spec is configuration, not code |
 | 📦 | **A complete worked example**, the *Orders API*: spec, generated client, server, and three layers of tests | Copy it when you onboard your own spec |
-| 📖 | **A step-by-step guide** for a new spec ([section 6](#6-onboarding-a-new-openapi-spec-step-by-step)) and an [authentication cookbook](docs/authentication.md) | The procedure is the product |
+| 📖 | **A step-by-step guide** for onboarding a new spec ([section 6](#6-onboarding-a-new-openapi-spec-step-by-step)) and an [authentication cookbook](docs/authentication.md) | The procedure is repeatable: a new API is configuration plus a few small files |
 
 ```bash
 git clone https://github.com/dmitrykislov/contract-first-spring.git && cd contract-first-spring
@@ -36,7 +36,6 @@ curl -s -H 'X-API-Key: dev-api-key-1' localhost:8080/api/v1/catalog/products/WID
 9. [Day two: when the spec changes](#9-day-two-when-the-spec-changes)
 10. [Build and run](#10-build-and-run)
 11. [Libraries used and why](#11-libraries-used-and-why)
-12. [Defects the conformance tests caught](#12-defects-the-conformance-tests-caught)
 
 ---
 
@@ -56,8 +55,8 @@ build derives everything else from it:
 | the business logic inside controllers | the routes, parameter binding and validation around it |
 | conformance tests | pass or fail against the spec, not against what someone remembered |
 
-The payoff is concrete. While this repository was being built, the conformance tests found six real defects in code
-that "worked" ([section 12](#12-defects-the-conformance-tests-caught)).
+The payoff: a wrong status code, a missing header, a `null` where the schema forbids it, or an undocumented response
+is a failed build, not a production incident.
 
 ## 2. How it works at build time: one YAML, four outputs
 
@@ -273,13 +272,9 @@ flowchart TB
 
 Check ④ is the heart of it. A test that asserts `status 404` proves what the developer expected; the validator
 (Atlassian's `openapi-request-validator`, fed the same YAML) proves what the **contract** expects, for the whole
-response. `DocumentedResponsesCoverageTest` runs last and fails if any documented response of any operation was never
-produced during the suite: today that is 8 operations and 38 responses, all exercised.
-
-The suite was checked by mutation. Eleven defects were injected one at a time (201 turned into 200, field errors
-dropped, a controller left unregistered, nulls serialised on either side, idempotent replay removed, the API-key check
-disabled, PATCH ignoring a field, a response code removed from the spec, the token sent on the wrong header, problems
-left undecoded). Every one failed the build.
+response: status, headers, media type and body schema. `DocumentedResponsesCoverageTest` runs last and fails if any
+documented response of any operation was never produced during the suite. For the Orders example that means 8
+operations and 38 documented responses, every one exercised and validated on every build.
 
 ## 6. Onboarding a new OpenAPI spec, step by step
 
@@ -572,20 +567,6 @@ coordinates are the only repository-specific detail.
 
 Not used: Spring Cloud Contract (its own DSL), springdoc-openapi (code-first, the opposite direction), hand-written
 client wrappers (they duplicate the contract).
-
-## 12. Defects the conformance tests caught
-
-All fixed; listed because they are exactly what this setup exists to find.
-
-* Four operations could return `400` (malformed UUID or SKU pattern) without the spec declaring it; PUT could return
-  `422` for an unknown SKU without declaring it.
-* `Problem.instance` was a path where the schema requires an absolute `uri`.
-* A test `application.yaml` in the e2e module shadowed the server's and switched off `NON_NULL` inclusion,
-  producing `"errors": null`. JSON policy now lives in code.
-* The client sent `"notes": null` for unset optional fields; it now pins its own serialisation policy.
-* `OffsetDateTime` query values were formatted in a way the server tolerated but RFC 3339 does not require servers to
-  accept; the client-side validator flagged it.
-* The response-coverage test, added last, found four documented responses that no test had ever produced.
 
 ## License
 

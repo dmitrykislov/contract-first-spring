@@ -36,7 +36,7 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     env:
-      SPEC: orders-api-spec/src/main/resources/openapi/orders-api.yaml
+      SPEC: examples/orders-api/spec/src/main/resources/openapi/orders-api.yaml
       OPENAPI_DIFF_VERSION: 2.1.7
     steps:
       - uses: actions/checkout@v4

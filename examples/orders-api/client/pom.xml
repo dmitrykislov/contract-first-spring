@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>io.github.dmitrykislov</groupId>
+    <artifactId>contract-first-spring</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <relativePath>../../../pom.xml</relativePath>
+  </parent>
+
+  <artifactId>example-orders-api-client</artifactId>
+  <name>example-orders-api-client</name>
+  <description>
+    Spring Boot 4 auto-configured declarative HTTP client for the Orders API.
+    Models and @HttpExchange interfaces are generated from the OpenAPI contract at build time.
+  </description>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-restclient</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-jackson</artifactId>
+    </dependency>
+    <dependency>
+      <!-- Token strategies, retries, request-id propagation, ProblemDetail error mapping, JSON policy. -->
+      <groupId>io.github.dmitrykislov</groupId>
+      <artifactId>contract-first-client-starter</artifactId>
+    </dependency>
+    <dependency>
+      <!-- API only, no provider: the generator still marks required model properties @NotNull, which is
+           documentation for callers; nothing validates on the client side. -->
+      <groupId>jakarta.validation</groupId>
+      <artifactId>jakarta.validation-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>jakarta.annotation</groupId>
+      <artifactId>jakarta.annotation-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-configuration-processor</artifactId>
+      <optional>true</optional>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-restclient-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.github.dmitrykislov</groupId>
+      <artifactId>contract-first-test-support</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <!-- Propagation tests simulate an incoming servlet request. -->
+      <groupId>jakarta.servlet</groupId>
+      <artifactId>jakarta.servlet-api</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <!-- Only to read the contract in ClientContractCoverageTest; consumers never need it. -->
+      <groupId>io.github.dmitrykislov</groupId>
+      <artifactId>example-orders-api-spec</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.openapitools</groupId>
+        <artifactId>openapi-generator-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>generate-orders-client</id>
+            <goals>
+              <goal>generate</goal>
+            </goals>
+            <configuration>
+              <library>spring-http-interface</library>
+              <apiPackage>io.github.dmitrykislov.examples.orders.client.api</apiPackage>
+              <modelPackage>io.github.dmitrykislov.examples.orders.client.model</modelPackage>
+              <generateApiTests>false</generateApiTests>
+              <generateModelTests>false</generateModelTests>
+              <generateApiDocumentation>false</generateApiDocumentation>
+              <generateModelDocumentation>false</generateModelDocumentation>
+              <configOptions>
+                <!-- Constraint annotations are inert on an HTTP service proxy; the server validates.
+                     Both flags are needed: the built-in-validation flag alone keeps the annotations. -->
+                <useBeanValidation>false</useBeanValidation>
+                <useSpringBuiltInValidation>false</useSpringBuiltInValidation>
+                <performBeanValidation>false</performBeanValidation>
+              </configOptions>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>

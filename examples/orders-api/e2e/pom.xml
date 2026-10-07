@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>io.github.dmitrykislov</groupId>
+    <artifactId>contract-first-spring</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <relativePath>../../../pom.xml</relativePath>
+  </parent>
+
+  <artifactId>example-orders-api-e2e</artifactId>
+  <name>example-orders-api-e2e</name>
+  <description>
+    End-to-end tests: boots the server on a random port and drives it through the generated declarative client,
+    validating every HTTP exchange against the OpenAPI contract.
+  </description>
+
+  <dependencies>
+    <dependency>
+      <groupId>io.github.dmitrykislov</groupId>
+      <artifactId>example-orders-api-server</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.github.dmitrykislov</groupId>
+      <artifactId>example-orders-api-client</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <!-- The contract itself (YAML + OrdersContract constants), used by the conformance tests. -->
+      <groupId>io.github.dmitrykislov</groupId>
+      <artifactId>example-orders-api-spec</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.github.dmitrykislov</groupId>
+      <artifactId>contract-first-test-support</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-web-server-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <!-- End-to-end tests open sockets and boot several contexts: run them as *IT under Failsafe so
+             'mvn test' stays fast and a failing scenario is reported in 'verify'. -->
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <executions>
+          <execution>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <!-- Nothing to deploy from this module. -->
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-deploy-plugin</artifactId>
+        <configuration>
+          <skip>true</skip>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+</project>

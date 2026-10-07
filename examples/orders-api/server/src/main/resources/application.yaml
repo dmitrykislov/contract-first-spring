@@ -1,0 +1,28 @@
+spring:
+  application:
+    name: example-orders-api-server
+
+server:
+  port: 8080
+  error:
+    include-message: never
+    include-stacktrace: never
+
+contract-first:
+  server:
+    base-path: /api/v1                                  # path part of servers[0].url in the contract
+    problems:
+      type-namespace: https://orders.example.com/problems/
+    api-key:
+      # Static demo keys. In a real deployment inject these from a secret store.
+      keys:
+        - dev-api-key-1
+        - dev-api-key-2
+
+openapi:
+  orders:
+    base-path: ${contract-first.server.base-path}       # the generated @RequestMapping placeholder reads this key
+
+logging:
+  level:
+    io.github.dmitrykislov: INFO

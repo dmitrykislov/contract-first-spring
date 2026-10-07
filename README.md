@@ -12,14 +12,27 @@ This repository contains:
 
 | | What | Why you care |
 |---|------|--------------|
-| 🧱 | **Three small libraries** you add as dependencies: `contract-first-client-support` (one annotation turns generated interfaces into configured clients: authentication, retries, correlation ids, error mapping), `contract-first-server-support` (problem rendering, domain-error mapping, correlation ids, API-key security blocks) and `contract-first-test-support` (validate any HTTP exchange against any OpenAPI document, reusable coverage tests) | Everything that is not specific to one API lives here, so onboarding a new spec is one annotated class on the client, one exception mapper on the server, and three-line test subclasses |
-| 📦 | **A complete worked example**, the *Orders API*: spec, generated client, server, and three layers of tests | Copy it when you onboard your own spec |
+| 🧱 | **Three libraries under `libs/`, the things you depend on**: `contract-first-client-starter` (one annotation turns generated interfaces into configured clients: authentication, retries, correlation ids, error mapping), `contract-first-server-starter` (problem rendering, domain-error mapping, correlation ids, API-key security blocks) and `contract-first-test-support` (validate any HTTP exchange against any OpenAPI document, reusable coverage tests) | Everything that is not specific to one API lives here, so onboarding a new spec is one annotated class on the client, one exception mapper on the server, and three-line test subclasses |
+| 📦 | **One worked example under `examples/orders-api/`, the thing you copy**: spec, generated client, server, and three layers of tests, published as `example-orders-api-*` so it can never be mistaken for a library | Copy it when you onboard your own spec; never depend on it |
 | 📖 | **A step-by-step guide** for onboarding a new spec ([section 6](#6-onboarding-a-new-openapi-spec-step-by-step)) and an [authentication cookbook](docs/authentication.md) | The procedure is repeatable: a new API is configuration plus a few small files |
+
+```
+contract-first-spring/
+├── libs/                                 ← reusable: add these to your own projects
+│   ├── contract-first-client-starter     ← compile scope in every client jar you publish
+│   ├── contract-first-server-starter     ← compile scope in every service that implements a contract
+│   └── contract-first-test-support       ← test scope wherever exchanges are checked against a spec
+└── examples/orders-api/                  ← the worked example: copy from it, never depend on it
+    ├── spec/     → example-orders-api-spec      the YAML as a jar
+    ├── client/   → example-orders-api-client    generated client + one annotated class
+    ├── server/   → example-orders-api-server    generated interfaces + controllers + domain
+    └── e2e/      → example-orders-api-e2e       server ⇄ client over real HTTP
+```
 
 ```bash
 git clone https://github.com/dmitrykislov/contract-first-spring.git && cd contract-first-spring
-mvn verify                       # generates code, compiles, runs 160 tests; every HTTP exchange is checked against the spec
-java -jar orders-api-server/target/orders-api-server-1.0.0-SNAPSHOT-exec.jar
+mvn verify                       # generates code, compiles, runs 162 tests; every HTTP exchange is checked against the spec
+java -jar examples/orders-api/server/target/example-orders-api-server-1.0.0-SNAPSHOT-exec.jar
 curl -s -H 'X-API-Key: dev-api-key-1' localhost:8080/api/v1/catalog/products/WIDGET-BLUE-L
 ```
 
@@ -69,8 +82,8 @@ flowchart LR
     GEN --> CI["Client interfaces<br/><code>@HttpExchange</code> methods"]
     GEN --> SM["Server models<br/>same shapes, with validation constraints"]
     GEN --> SI["Server interfaces<br/><code>@RequestMapping</code> methods"]
-    CM & CI --> CJ["📦 orders-api-client.jar<br/>+ one @EnableContractClient class"]
-    SM & SI --> SJ["📦 orders-api-server.jar<br/>+ controllers that implement the interfaces"]
+    CM & CI --> CJ["📦 example-orders-api-client.jar<br/>+ one @EnableContractClient class"]
+    SM & SI --> SJ["📦 example-orders-api-server.jar<br/>+ controllers that implement the interfaces"]
 ```
 
 **How to read it.** Every `mvn` build parses the YAML and renders four sets of Java sources into `target/` (never
@@ -141,7 +154,7 @@ server interface says *what* to accept and your controller supplies the logic.
 
 ## 3. How it works at runtime: the client
 
-An application that depends on `orders-api-client` injects the generated `OrdersApi` and calls it. This is what
+An application that depends on `example-orders-api-client` injects the generated `OrdersApi` and calls it. This is what
 happens on `orders.getOrder(id, null)`:
 
 ```mermaid
@@ -184,7 +197,7 @@ sequenceDiagram
    named `orders` and wires everything below.
 2. **The `RestClient` underneath** is built by Spring Boot from `spring.http.serviceclient.orders.*`: base URL,
    connect and read timeouts, redirects, default headers, TLS bundle. The client jar contains none of these values.
-3. **The three interceptors** come from `contract-first-client-support` and are configured by
+3. **The three interceptors** come from `contract-first-client-starter` and are configured by
    `contract-first.clients.orders.retry.*`, `.request-id.*` and `.auth.*`, layered over
    `contract-first.clients.defaults.*`. Retry is outermost so every attempt resolves the token again (useful after
    a key rotation) and keeps the correlation id.
@@ -207,7 +220,7 @@ typed exception and a token-provider marker, and the `AutoConfiguration.imports`
 public class OrdersClient {}
 ```
 
-Behind the annotation, `contract-first-client-support` registers the HTTP service group, binds the group's settings,
+Behind the annotation, `contract-first-client-starter` registers the HTTP service group, binds the group's settings,
 resolves the token provider (a bean of the marker type, else a bean named `ordersTokenProvider`, else the built-in
 provider for the configured mode), applies the three interceptors and the JSON policy, and maps errors to the
 exception type. A misspelt group in configuration, a missing token in `static` mode, or a missing provider bean in
@@ -236,7 +249,7 @@ flowchart TB
 2. **The compiler enforces completeness.** The interface is generated without default methods, so a controller that
    forgets an operation does not compile, and a spec change that alters a signature produces a `javac` error at the
    exact method.
-3. **Security is Spring Security**, assembled from `contract-first-server-support` building blocks that exist only
+3. **Security is Spring Security**, assembled from `contract-first-server-starter` building blocks that exist only
    when `contract-first.server.api-key.keys` is set: an `AuthenticationFilter` converting the `X-API-Key` header, a
    constant-time `ApiKeyAuthenticationManager`, and an entry point rendering 401 as a `ProblemDetail`. The service's
    own `SecurityConfig` reduces to one statement, `apiKey.configure(http).build()`, and stays in charge of what else
@@ -282,8 +295,18 @@ operations and 38 documented responses, every one exercised and validated on eve
 
 ## 6. Onboarding a new OpenAPI spec, step by step
 
-Suppose another team publishes `billing-api.yaml`, mounted at `/billing/v1`, secured by `Authorization: Bearer …`.
-Here is the whole procedure. Each step names the Orders file to copy from.
+First, who adds which module. This is the whole dependency story:
+
+| If you are… | add | scope | because |
+|-------------|-----|-------|---------|
+| **consuming** an API published this way | that API's client jar, e.g. `example-orders-api-client` | compile | it brings `contract-first-client-starter` transitively; set properties, inject the interface, done |
+| **publishing a client** for a spec | `contract-first-client-starter` | compile | supplies `@EnableContractClient` and the whole runtime; you write one class |
+| **implementing** a spec in a service | `contract-first-server-starter` | compile | problem rendering, request ids, security blocks; you write controllers and one exception mapper |
+| **testing** a client or server against its spec | `contract-first-test-support` and the spec jar | test | validator adapters and the coverage base tests; the spec jar puts the YAML on the test classpath |
+| anything | `example-orders-api-*` | never | they are the sample to copy from, not libraries |
+
+Now the procedure. Suppose another team publishes `billing-api.yaml`, mounted at `/billing/v1`, secured by
+`Authorization: Bearer …`. Each step names the example directory to copy from.
 
 ```mermaid
 flowchart LR
@@ -293,7 +316,7 @@ flowchart LR
     D --> E["5 · Consume<br/>properties + inject"]
 ```
 
-### Step 1. Package the spec (copy `orders-api-spec`)
+### Step 1. Package the spec (copy `examples/orders-api/spec`)
 
 ```
 billing-api-spec/
@@ -315,7 +338,7 @@ Copy `OrdersApiSpecTest` as `BillingApiSpecTest` and point it at the new resourc
 the spec lacks operationIds, documents errors as something other than `problem+json`, or has a version that does not
 match your artifact version. Fix the spec or relax the rule; both are legitimate, but decide consciously.
 
-### Step 2. Generate and publish the client (copy `orders-api-client`)
+### Step 2. Generate and publish the client (copy `examples/orders-api/client`)
 
 Add the generator execution to the module's `pom.xml`, changing only the packages:
 
@@ -353,17 +376,17 @@ public class BillingClient {}
 ```
 
 and name it in `src/main/resources/META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`.
-Dependencies: `contract-first-client-support`, `jakarta.validation-api`, `jakarta.annotation-api`. That is the whole
+Dependencies: `contract-first-client-starter`, `jakarta.validation-api`, `jakarta.annotation-api`. That is the whole
 module. Two optional one-liners make it nicer for callers: `BillingApiException extends ApiException` (declare the
 five-argument constructor and pass `exception = BillingApiException.class`) and `BillingTokenProvider extends
 TokenProvider` (pass `tokenProvider = BillingTokenProvider.class`) so applications with several clients get a typed
 catch and a typed token bean. Without them, `ApiException.group()` and a bean named `billingTokenProvider` do the
 same job. `mvn -pl billing-api-client -am install` publishes the jar.
 
-### Step 3. Implement the server (copy `orders-api-server`), if the API is yours
+### Step 3. Implement the server (copy `examples/orders-api/server`), if the API is yours
 
 Copy the server generator execution (`library=spring-boot`, `interfaceOnly`, `skipDefaultInterface`,
-`requestMappingMode=api_interface`), set your packages, depend on `contract-first-server-support`, build once, and
+`requestMappingMode=api_interface`), set your packages, depend on `contract-first-server-starter`, build once, and
 implement the generated interfaces:
 
 ```java
@@ -388,7 +411,7 @@ derived from the spec's `info.title` (`Orders API` became `openapi.orders.base-p
 interface after the first build rather than guessing.
 
 For an API key, add a `SecurityFilterChain` bean that returns `apiKey.configure(http).build()`, as
-`orders-api-server`'s `SecurityConfig` does. For OAuth2 bearer tokens use Spring Security's resource-server support
+the example server's `SecurityConfig` does. For OAuth2 bearer tokens use Spring Security's resource-server support
 instead and keep the library's `ProblemAuthenticationEntryPoint` for problem-shaped 401s.
 
 ### Step 4. Prove conformance (subclass the shared tests)
@@ -405,7 +428,7 @@ public abstract class ApiTestBase {
 
 Write one MockMvc test per operation and per error path, calling `assertExchangeConforms` (or
 `assertResponseConforms` when the request is deliberately invalid). Then three subclasses, each a few lines, exactly
-as in `orders-api-server/src/test`:
+as in `examples/orders-api/server/src/test`:
 
 | Subclass of | Proves | Needs on the subclass |
 |-------------|--------|------------------------|
@@ -414,7 +437,7 @@ as in `orders-api-server/src/test`:
 | `DocumentedResponsesCoverageSupport` | every documented response was produced by some test | `@Order(Integer.MAX_VALUE)` and the copied `junit-platform.properties`, so it runs last |
 
 In the client module subclass `ClientContractCoverageSupport` (no Spring context needed). For end-to-end, copy
-`orders-api-e2e`: the consumer application adds `CONTRACT.validatingInterceptor()` to the group and every real
+`examples/orders-api/e2e`: the consumer application adds `CONTRACT.validatingInterceptor()` to the group and every real
 exchange is validated.
 
 ### Step 5. Consume it
@@ -444,13 +467,13 @@ Other token modes (forwarding the caller's token, fetching from an identity prov
 
 ```mermaid
 flowchart LR
-    E2E["orders-api-e2e<br/><i>tests only</i>"]
-    CLIENT["orders-api-client<br/><i>generated + one annotated class</i>"]
-    SERVER["orders-api-server<br/><i>generated interfaces + controllers + domain</i>"]
-    CS["contract-first-client-support<br/><i>runtime for generated clients</i>"]
-    SS["contract-first-server-support<br/><i>problems, security blocks, request ids</i>"]
+    E2E["example-orders-api-e2e<br/><i>tests only</i>"]
+    CLIENT["example-orders-api-client<br/><i>generated + one annotated class</i>"]
+    SERVER["example-orders-api-server<br/><i>generated interfaces + controllers + domain</i>"]
+    CS["contract-first-client-starter<br/><i>runtime for generated clients</i>"]
+    SS["contract-first-server-starter<br/><i>problems, security blocks, request ids</i>"]
     TS["contract-first-test-support<br/><i>validate exchanges against any spec</i>"]
-    SPEC["orders-api-spec<br/><i>the YAML + constants</i>"]
+    SPEC["example-orders-api-spec<br/><i>the YAML + constants</i>"]
 
     E2E -.->|test| CLIENT
     E2E -.->|test| SERVER
@@ -469,23 +492,23 @@ flowchart LR
     class E2E,CLIENT,SERVER,SPEC example;
 ```
 
-Dependencies point to the right. Blue boxes are the three reusable libraries you add to your own projects; yellow
-boxes are the Orders example. Thick arrows are the only compile-scope dependencies: a consumer's classpath gets the
-client plus `contract-first-client-support`, a service gets `contract-first-server-support`, nothing else from here.
+Dependencies point to the right. Blue boxes are the three reusable libraries under `libs/`; yellow boxes are the
+example under `examples/orders-api/`. Thick arrows are the only compile-scope dependencies: a consumer's classpath gets the
+client plus `contract-first-client-starter`, a service gets `contract-first-server-starter`, nothing else from here.
 Every dotted arrow is test scope. Note what is *absent*: the client never depends on the server or the spec jar at
 compile time, and the server never depends on the client.
 
-| Module | Contains | Who depends on it | Why it exists separately |
-|--------|----------|-------------------|--------------------------|
-| **contract-first-client-support** | `@EnableContractClient`, `ContractClientsProperties` (the `contract-first.clients.*` namespace with `defaults`), token providers (`Static`, `Propagating`, `Caching`), `TokenContext`, the three interceptors, `ProblemResponseErrorHandler`, `ApiException` | every client module, at compile scope | Fix a bug in retries or token handling once, for every API |
-| **contract-first-server-support** | `ContractExceptionHandler` + `DomainExceptionMapper`, `ProblemFactory`, `ContractJson` scoped to MVC converters, `RequestIdFilter`, API-key security blocks (`ApiKeySecurity`, manager, converter, entry point), `contract-first.server.*` properties | every server module, at compile scope | Problem rendering and security are correct once; a service keeps only its domain mapping and its own filter chain |
-| **contract-first-test-support** | `Contract` (validator, operations, coverage record), `MockMvcContract`, `ContractValidatingInterceptor`, and the base tests `ServerRouteCoverageSupport`, `ClientContractCoverageSupport`, `DocumentedResponsesCoverageSupport`, `UnauthenticatedRequestsSupport` | server tests, e2e tests, client coverage test, at test scope | Keeps validator dependencies out of production jars; one implementation of the adapters and of the coverage tests |
-| **orders-api-spec** | the YAML, `OrdersContract` constants, filtered `contract.properties` | tests of client, server and e2e | The contract must be loadable from the classpath wherever it is validated, and its version must be checkable |
-| **orders-api-client** | generated models and interfaces, `OrdersClient` (the annotation), `OrdersTokenProvider`, `OrdersApiException` | consuming applications | The one artifact consumers see |
-| **orders-api-server** | generated interfaces and models, controllers, domain, `OrdersDomainExceptionMapper`, a ten-line `SecurityConfig` | `orders-api-e2e` (tests only) | A separate deployable; its plain jar is the main artifact and the runnable fat jar is attached as `-exec` |
-| **orders-api-e2e** | `OrdersEndToEndIT` and three small consumer applications | nobody | The only place client and server meet; runs under Failsafe so `mvn test` stays fast |
+| Artifact (directory) | Contains | Who depends on it | Why it exists separately |
+|----------------------|----------|-------------------|--------------------------|
+| **contract-first-client-starter** (`libs/contract-first-client-starter`) | `@EnableContractClient`, `ContractClientsProperties` (the `contract-first.clients.*` namespace with `defaults`), token providers (`Static`, `Propagating`, `Caching`), `TokenContext`, the three interceptors, `ProblemResponseErrorHandler`, `ApiException` | every client module, at compile scope | Fix a bug in retries or token handling once, for every API |
+| **contract-first-server-starter** (`libs/contract-first-server-starter`) | `ContractExceptionHandler` + `DomainExceptionMapper`, `ProblemFactory`, `ContractJson` scoped to MVC converters, `RequestIdFilter`, API-key security blocks (`ApiKeySecurity`, manager, converter, entry point), `contract-first.server.*` properties | every server module, at compile scope | Problem rendering and security are correct once; a service keeps only its domain mapping and its own filter chain |
+| **contract-first-test-support** (`libs/contract-first-test-support`) | `Contract` (validator, operations, coverage record), `MockMvcContract`, `ContractValidatingInterceptor`, and the base tests `ServerRouteCoverageSupport`, `ClientContractCoverageSupport`, `DocumentedResponsesCoverageSupport`, `UnauthenticatedRequestsSupport` | server tests, e2e tests, client coverage test, at test scope | Keeps validator dependencies out of production jars; one implementation of the adapters and of the coverage tests |
+| **example-orders-api-spec** (`examples/orders-api/spec`) | the YAML, `OrdersContract` constants, filtered `contract.properties` | tests of client, server and e2e | The contract must be loadable from the classpath wherever it is validated, and its version must be checkable |
+| **example-orders-api-client** (`examples/orders-api/client`) | generated models and interfaces, `OrdersClient` (the annotation), `OrdersTokenProvider`, `OrdersApiException` | consuming applications | The one artifact consumers see |
+| **example-orders-api-server** (`examples/orders-api/server`) | generated interfaces and models, controllers, domain, `OrdersDomainExceptionMapper`, a ten-line `SecurityConfig` | `example-orders-api-e2e` (tests only) | A separate deployable; its plain jar is the main artifact and the runnable fat jar is attached as `-exec` |
+| **example-orders-api-e2e** (`examples/orders-api/e2e`) | `OrdersEndToEndIT` and three small consumer applications | nobody | The only place client and server meet; runs under Failsafe so `mvn test` stays fast |
 
-Reactor order: client-support → server-support → test-support → spec → client → server → e2e.
+Reactor order: client-starter → server-starter → test-support → spec → client → server → e2e.
 
 ## 8. Configuration reference
 
@@ -501,7 +524,7 @@ Everything below is a property; the client jar contains no environment-specific 
 | `default-header.<name>` | headers added to every call |
 | `ssl.bundle` | a `spring.ssl.bundle.*` name for mTLS or custom trust |
 
-**Owned by `contract-first-client-support`** (`contract-first.clients.<group>.*`; the same keys under
+**Owned by `contract-first-client-starter`** (`contract-first.clients.<group>.*`; the same keys under
 `contract-first.clients.defaults.*` apply to every client and are overridden per group):
 
 | Property | Default | Meaning |
@@ -522,7 +545,7 @@ Everything below is a property; the client jar contains no environment-specific 
 If no token can be resolved, or the provider throws, the call fails before anything is sent with
 `ClientAuthenticationException` that names the mode and the fix.
 
-**Owned by `contract-first-server-support`** (`contract-first.server.*`):
+**Owned by `contract-first-server-starter`** (`contract-first.server.*`):
 
 | Property | Default | Meaning |
 |----------|---------|---------|
@@ -557,8 +580,8 @@ version (a lint test enforces this).
 mvn verify                                 # generate, compile, unit + MockMvc tests (Surefire), end-to-end (Failsafe)
 mvn test                                   # unit + MockMvc tests only (no end-to-end suite)
 mvn generate-sources                       # only regenerate; look in */target/generated-sources/openapi
-mvn -pl orders-api-client -am install      # install the client jar locally
-java -jar orders-api-server/target/orders-api-server-1.0.0-SNAPSHOT-exec.jar
+mvn -pl examples/orders-api/client -am install   # install the example client jar locally
+java -jar examples/orders-api/server/target/example-orders-api-server-1.0.0-SNAPSHOT-exec.jar
 ```
 
 Requirements: Java 25 and Maven 3.9 or later (enforced). The three libraries target Spring Boot 4.1 and Java 25
@@ -567,7 +590,7 @@ Boot 4.1.1 and OpenAPI Generator 7.26.0, about 40 MB. `mvn verify -DskipITs` ski
 reports land in `*/target/site/jacoco`. Dependabot and CodeQL are configured under `.github/`. Generated sources live
 under `target/` and are never committed.
 
-Compatibility policy for the libraries: once several client jars depend on `contract-first-client-support`, Maven
+Compatibility policy for the libraries: once several client jars depend on `contract-first-client-starter`, Maven
 resolves one version for all of them, so the libraries follow semantic versioning with no breaking change inside a
 major. A binary-compatibility check (japicmp) is to be added to CI against the first release, `1.0.0`.
 

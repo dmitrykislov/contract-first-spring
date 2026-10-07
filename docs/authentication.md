@@ -2,13 +2,13 @@
 
 The Orders contract declares one security scheme, an API key in the `X-API-Key` header, and the generated
 `@HttpExchange` interfaces know nothing about it: security requirements are not parameters, so the generator leaves
-them out. The shared runtime in `contract-first-client-support` adds a per-request interceptor that resolves a token
+them out. The shared runtime in `contract-first-client-starter` adds a per-request interceptor that resolves a token
 through a `TokenProvider` and writes it to the configured header. The Orders client narrows that to its own marker
 type `OrdersTokenProvider` so an application with several contract clients can define one provider bean per API.
 Everything below is about choosing and shaping that provider.
 
 Classes referenced below live in `io.github.dmitrykislov.contractfirst.client.auth` (`TokenProvider`,
-`TokenContext`, `CachingTokenProvider`, `ClientAuthenticationException`) and `io.github.dmitrykislov.orders.client`
+`TokenContext`, `CachingTokenProvider`, `ClientAuthenticationException`) and `io.github.dmitrykislov.examples.orders.client`
 (`OrdersTokenProvider`, `OrdersApiException`).
 
 Settings live under `contract-first.clients.orders.auth` (and `contract-first.clients.defaults.auth` for values shared by every client):

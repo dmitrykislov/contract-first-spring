@@ -23,13 +23,13 @@
   </description>
 
   <modules>
-    <module>contract-first-client-support</module>
-    <module>contract-first-server-support</module>
-    <module>contract-first-test-support</module>
-    <module>orders-api-spec</module>
-    <module>orders-api-client</module>
-    <module>orders-api-server</module>
-    <module>orders-api-e2e</module>
+    <module>libs/contract-first-client-starter</module>
+    <module>libs/contract-first-server-starter</module>
+    <module>libs/contract-first-test-support</module>
+    <module>examples/orders-api/spec</module>
+    <module>examples/orders-api/client</module>
+    <module>examples/orders-api/server</module>
+    <module>examples/orders-api/e2e</module>
   </modules>
 
   <properties>
@@ -44,24 +44,24 @@
     <swagger-parser.version>2.1.48</swagger-parser.version>
 
     <!-- Single source of truth for the contract, shared by all generator executions. -->
-    <orders.spec.file>${maven.multiModuleProjectDirectory}/orders-api-spec/src/main/resources/openapi/orders-api.yaml</orders.spec.file>
+    <orders.spec.file>${maven.multiModuleProjectDirectory}/examples/orders-api/spec/src/main/resources/openapi/orders-api.yaml</orders.spec.file>
   </properties>
 
   <dependencyManagement>
     <dependencies>
       <dependency>
         <groupId>io.github.dmitrykislov</groupId>
-        <artifactId>orders-api-spec</artifactId>
+        <artifactId>example-orders-api-spec</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
         <groupId>io.github.dmitrykislov</groupId>
-        <artifactId>contract-first-client-support</artifactId>
+        <artifactId>contract-first-client-starter</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
         <groupId>io.github.dmitrykislov</groupId>
-        <artifactId>contract-first-server-support</artifactId>
+        <artifactId>contract-first-server-starter</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
@@ -71,12 +71,12 @@
       </dependency>
       <dependency>
         <groupId>io.github.dmitrykislov</groupId>
-        <artifactId>orders-api-client</artifactId>
+        <artifactId>example-orders-api-client</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>
         <groupId>io.github.dmitrykislov</groupId>
-        <artifactId>orders-api-server</artifactId>
+        <artifactId>example-orders-api-server</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>

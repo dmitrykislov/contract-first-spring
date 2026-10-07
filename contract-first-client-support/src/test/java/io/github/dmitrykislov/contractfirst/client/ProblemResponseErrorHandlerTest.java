@@ -22,13 +22,13 @@ class ProblemResponseErrorHandlerTest {
 
     /** What an API's own exception type looks like. */
     static final class ThingsApiException extends ApiException {
-        ThingsApiException(HttpStatusCode status, @Nullable ProblemDetail problem, List<ApiFieldError> errors, @Nullable String raw) {
-            super(status, problem, errors, raw);
+        public ThingsApiException(String group, HttpStatusCode status, @Nullable ProblemDetail problem, List<ApiFieldError> errors, @Nullable String raw) {
+            super(group, status, problem, errors, raw);
         }
     }
 
     private final JsonMapper mapper = JsonMapper.builder().addMixIn(ProblemDetail.class, ProblemDetailJacksonMixin.class).build();
-    private final ProblemResponseErrorHandler handler = new ProblemResponseErrorHandler(mapper, ThingsApiException::new);
+    private final ProblemResponseErrorHandler handler = new ProblemResponseErrorHandler("things", mapper, ThingsApiException::new);
     private final MockClientHttpRequest request = new MockClientHttpRequest(HttpMethod.POST, URI.create("http://api/things"));
 
     @Test
@@ -49,7 +49,7 @@ class ProblemResponseErrorHandlerTest {
                             new ApiFieldError("lines[0].quantity", "must be >= 1", "0"),
                             new ApiFieldError("notes", "too long", null));
                 })
-                .hasMessage("400 Validation failed: Request violates the contract");
+                .hasMessage("[things] 400 Validation failed: Request violates the contract");
     }
 
     @Test
@@ -68,7 +68,7 @@ class ProblemResponseErrorHandlerTest {
         assertThatThrownBy(() -> handler.handle(request, response(HttpStatus.BAD_GATEWAY, MediaType.TEXT_HTML, html)))
                 .isInstanceOfSatisfying(ApiException.class, ex -> {
                     assertThat(ex.problem()).isEmpty();
-                    assertThat(ex.getMessage()).contains("502 with non-problem body").contains("... (" + html.length() + " chars)")
+                    assertThat(ex.getMessage()).contains("502 with non-problem body").contains("[things]").contains("... (" + html.length() + " chars)")
                             .hasSizeLessThan(ApiException.RAW_BODY_EXCERPT_LENGTH + 80);
                 });
         assertThatThrownBy(() -> handler.handle(request, response(HttpStatus.NOT_FOUND, null, "")))

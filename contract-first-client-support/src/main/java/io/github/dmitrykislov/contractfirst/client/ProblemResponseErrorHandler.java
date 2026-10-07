@@ -23,11 +23,13 @@ public final class ProblemResponseErrorHandler implements RestClient.ResponseSpe
 
     public static final String ERRORS_PROPERTY = "errors";
 
+    private final String group;
     private final JsonMapper jsonMapper;
     private final ApiExceptionFactory factory;
     private final JavaType fieldErrorList;
 
-    public ProblemResponseErrorHandler(JsonMapper jsonMapper, ApiExceptionFactory factory) {
+    public ProblemResponseErrorHandler(String group, JsonMapper jsonMapper, ApiExceptionFactory factory) {
+        this.group = group;
         this.jsonMapper = jsonMapper;
         this.factory = factory;
         this.fieldErrorList = jsonMapper.getTypeFactory().constructCollectionType(List.class, ApiFieldError.class);
@@ -37,7 +39,7 @@ public final class ProblemResponseErrorHandler implements RestClient.ResponseSpe
     public void handle(HttpRequest request, ClientHttpResponse response) throws IOException {
         String body = StreamUtils.copyToString(response.getBody(), StandardCharsets.UTF_8);
         ProblemDetail problem = decode(response.getHeaders().getContentType(), body);
-        throw factory.create(response.getStatusCode(), problem, fieldErrors(problem), body);
+        throw factory.create(group, response.getStatusCode(), problem, fieldErrors(problem), body);
     }
 
     private @Nullable ProblemDetail decode(@Nullable MediaType contentType, String body) {

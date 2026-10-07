@@ -36,8 +36,8 @@ class ContractClientSupportTest {
     record Payload(@Nullable String optional, String required, JsonNullable<String> nullable) {}
 
     static final class ThingsApiException extends ApiException {
-        ThingsApiException(HttpStatusCode status, @Nullable ProblemDetail problem, List<ApiFieldError> errors, @Nullable String raw) {
-            super(status, problem, errors, raw);
+        public ThingsApiException(String group, HttpStatusCode status, @Nullable ProblemDetail problem, List<ApiFieldError> errors, @Nullable String raw) {
+            super(group, status, problem, errors, raw);
         }
     }
 

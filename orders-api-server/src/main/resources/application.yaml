@@ -1,9 +1,6 @@
 spring:
   application:
     name: orders-api-server
-  mvc:
-    problemdetails:
-      enabled: false   # ApiExceptionHandler extends ResponseEntityExceptionHandler itself, with the API's type namespace
 
 server:
   port: 8080
@@ -11,18 +8,21 @@ server:
     include-message: never
     include-stacktrace: never
 
-openapi:
-  orders:
-    base-path: /api/v1   # read by the generated @RequestMapping placeholder and by ApiKeyAuthenticationFilter
-
-orders:
+contract-first:
   server:
-    security:
+    base-path: /api/v1                                  # path part of servers[0].url in the contract
+    problems:
+      type-namespace: https://orders.example.com/problems/
+    api-key:
       # Static demo keys. In a real deployment inject these from a secret store.
-      api-keys:
+      keys:
         - dev-api-key-1
         - dev-api-key-2
 
+openapi:
+  orders:
+    base-path: ${contract-first.server.base-path}       # the generated @RequestMapping placeholder reads this key
+
 logging:
   level:
-    io.github.dmitrykislov.orders: INFO
+    io.github.dmitrykislov: INFO

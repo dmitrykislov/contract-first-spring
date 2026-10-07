@@ -46,16 +46,16 @@ import org.springframework.test.web.client.MockRestServiceServer;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Verifies the auto-configured client end to end against a {@link MockRestServiceServer}: property
+ * Verifies the client wired by @EnableContractClient end to end against a {@link MockRestServiceServer}: property
  * binding, URL building, headers, JSON (de)serialisation and problem-aware error mapping.
  */
 @SpringBootTest(classes = MockedConsumerApp.class, properties = {
         "spring.http.serviceclient.orders.base-url=http://orders.test/api/v1",
         "spring.http.serviceclient.orders.connect-timeout=1500ms",
         "spring.http.serviceclient.orders.read-timeout=2500ms",
-        "orders.client.auth.token=secret-key"
+        "contract-first.clients.orders.auth.token=secret-key"
 })
-class OrdersClientAutoConfigurationTest {
+class OrdersClientTest {
 
     private static final String BASE = "http://orders.test/api/v1";
 
@@ -80,7 +80,7 @@ class OrdersClientAutoConfigurationTest {
 
     @Test
     void bindsConnectionSettingsFromStandardSpringBootProperties() {
-        var group = serviceClientProperties.get(OrdersClientProperties.GROUP);
+        var group = serviceClientProperties.get(OrdersClient.GROUP);
         assertThat(group.getBaseUrl()).isEqualTo(BASE);
         assertThat(group.getConnectTimeout()).isEqualTo(Duration.ofMillis(1500));
         assertThat(group.getReadTimeout()).isEqualTo(Duration.ofMillis(2500));
@@ -198,6 +198,7 @@ class OrdersClientAutoConfigurationTest {
 
         assertThatThrownBy(() -> ordersApi.getOrder(id, null))
                 .isInstanceOfSatisfying(OrdersApiException.class, ex -> {
+                    assertThat(ex.group()).isEqualTo("orders");
                     assertThat(ex.status()).isEqualTo(HttpStatus.NOT_FOUND);
                     assertThat(ex.problem()).isPresent().get().satisfies(problem -> {
                         assertThat(problem.getType()).hasToString("https://orders.example.com/problems/not-found");
@@ -206,7 +207,7 @@ class OrdersClientAutoConfigurationTest {
                         assertThat(problem.getInstance()).hasToString("http://orders.test/api/v1/orders/" + id);
                     });
                 })
-                .hasMessageContaining("404 Not Found");
+                .hasMessageContaining("[orders] 404 Not Found");
     }
 
     @Test
@@ -316,14 +317,32 @@ class OrdersClientAutoConfigurationTest {
                 .withUserConfiguration(MockedConsumerApp.class)
                 .withPropertyValues("spring.http.serviceclient.orders.base-url=http://orders.test");
 
-        runner.withPropertyValues("orders.client.auth.token=k", "orders.client.enabled=false")
+        runner.withPropertyValues("contract-first.clients.orders.auth.token=k", "contract-first.clients.orders.enabled=false")
                 .run(context -> assertThat(context).doesNotHaveBean(OrdersApi.class));
 
-        runner.withPropertyValues("orders.client.auth.token=k")
+        runner.withPropertyValues("contract-first.clients.orders.auth.token=k")
                 .run(context -> assertThat(context).hasSingleBean(OrdersApi.class).hasSingleBean(CatalogApi.class));
 
         runner.run(context -> assertThat(context).hasFailed()
                 .getFailure().rootCause().hasMessageContaining("auth.token"));
+    }
+
+    @Test
+    void defaultsApplyToEveryGroupAndMisspeltGroupsFailStartup() {
+        ApplicationContextRunner runner = new ApplicationContextRunner()
+                .withUserConfiguration(MockedConsumerApp.class)
+                .withPropertyValues("spring.http.serviceclient.orders.base-url=http://orders.test",
+                        "contract-first.clients.defaults.auth.token=shared-key",
+                        "contract-first.clients.defaults.retry.max-attempts=7");
+
+        runner.run(context -> assertThat(context).hasSingleBean(OrdersApi.class));
+
+        runner.withPropertyValues("contract-first.clients.ordres.auth.token=typo")
+                .run(context -> assertThat(context).hasFailed().getFailure()
+                        .hasStackTraceContaining("ordres").hasStackTraceContaining("registered: [orders]"));
+
+        runner.withPropertyValues("contract-first.clients.ordres.auth.token=typo", "contract-first.clients.strict=false")
+                .run(context -> assertThat(context).hasNotFailed());
     }
 
     private static Order sampleOrder(UUID id) {

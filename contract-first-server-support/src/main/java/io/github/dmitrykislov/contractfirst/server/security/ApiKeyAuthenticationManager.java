@@ -1,6 +1,5 @@
-package io.github.dmitrykislov.orders.server.security;
+package io.github.dmitrykislov.contractfirst.server.security;
 
-import io.github.dmitrykislov.orders.server.config.OrdersServerProperties;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Set;
@@ -8,19 +7,20 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
-import org.springframework.stereotype.Component;
 
 /**
- * Verifies presented API keys against the configured set. Defining this bean also makes Spring Boot's
- * default in-memory user (and its generated password) back off.
+ * Verifies presented API keys against a configured set in constant time per key. Refuses to exist
+ * without keys: a server that accepted nothing would be a misconfiguration, not a security posture.
  */
-@Component
-public class ApiKeyAuthenticationManager implements AuthenticationManager {
+public final class ApiKeyAuthenticationManager implements AuthenticationManager {
 
     private final Set<String> apiKeys;
 
-    public ApiKeyAuthenticationManager(OrdersServerProperties properties) {
-        this.apiKeys = Set.copyOf(properties.security().apiKeys());
+    public ApiKeyAuthenticationManager(Set<String> apiKeys) {
+        if (apiKeys == null || apiKeys.isEmpty()) {
+            throw new IllegalArgumentException("contract-first.server.api-key.keys must contain at least one key");
+        }
+        this.apiKeys = Set.copyOf(apiKeys);
     }
 
     @Override
@@ -38,7 +38,6 @@ public class ApiKeyAuthenticationManager implements AuthenticationManager {
         byte[] candidate = presented.getBytes(StandardCharsets.UTF_8);
         boolean match = false;
         for (String key : apiKeys) {
-            // Constant-time comparison per key to avoid leaking key prefixes through timing.
             match |= MessageDigest.isEqual(key.getBytes(StandardCharsets.UTF_8), candidate);
         }
         return match;

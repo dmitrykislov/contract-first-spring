@@ -34,7 +34,7 @@ public class MockedConsumerApp {
     @Bean
     @org.springframework.core.annotation.Order(Ordered.LOWEST_PRECEDENCE)
     RestClientHttpServiceGroupConfigurer mockServerBinding(MockServerHolder holder) {
-        return groups -> groups.filterByName(OrdersClientProperties.GROUP)
+        return groups -> groups.filterByName(OrdersClient.GROUP)
                 .forEachClient((group, builder) -> holder.server.set(MockRestServiceServer.bindTo(builder).build()));
     }
 }

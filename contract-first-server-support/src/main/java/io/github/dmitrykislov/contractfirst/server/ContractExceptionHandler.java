@@ -1,20 +1,21 @@
-package io.github.dmitrykislov.orders.server.web;
+package io.github.dmitrykislov.contractfirst.server;
 
-import io.github.dmitrykislov.orders.server.domain.OrdersDomainException;
-import io.github.dmitrykislov.orders.server.model.FieldError;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
+import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.core.MethodParameter;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
-import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.validation.method.ParameterErrors;
 import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -29,40 +30,41 @@ import org.springframework.web.method.annotation.HandlerMethodValidationExceptio
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 /**
- * Renders every failure as Spring's {@link ProblemDetail} with {@code application/problem+json}.
+ * Renders every failure as a {@link ProblemDetail} with {@code application/problem+json}.
  *
- * <p>Framework exceptions (type mismatch, missing header, unreadable body, unsupported media type,
- * unknown route, ...) are already mapped to the right status by {@link ResponseEntityExceptionHandler};
- * this class only decorates the resulting problem with the API's type namespace and absolute instance
- * URI, and enriches validation failures with field-level {@code errors}. Domain failures are matched
- * exhaustively over the sealed hierarchy, so a new case is a compile error until it has a status.
+ * <p>Framework exceptions keep the status mapping of {@link ResponseEntityExceptionHandler} and are
+ * decorated with the configured type namespace and an absolute instance. Validation failures carry the
+ * {@code errors} extension. Domain exceptions are mapped through {@link DomainExceptionMapper} beans;
+ * anything unmapped is a 500 with a neutral message and a logged stack trace.
+ *
+ * <p>Ordered last on purpose: across several {@code @ControllerAdvice} beans Spring uses the first
+ * advice (by order) that has any matching handler, so a catch-all here must not shadow an
+ * application's own, more specific advice.
  */
 @RestControllerAdvice
-public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
+@Order(Ordered.LOWEST_PRECEDENCE)
+public class ContractExceptionHandler extends ResponseEntityExceptionHandler {
 
-    private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
+    private static final Logger log = LoggerFactory.getLogger(ContractExceptionHandler.class);
 
     private final ProblemFactory problems;
+    private final List<DomainExceptionMapper> mappers;
 
-    public ApiExceptionHandler(ProblemFactory problems) {
+    public ContractExceptionHandler(ProblemFactory problems, List<DomainExceptionMapper> mappers) {
         this.problems = problems;
-    }
-
-    @ExceptionHandler(OrdersDomainException.class)
-    ResponseEntity<ProblemDetail> domain(OrdersDomainException ex, HttpServletRequest request) {
-        HttpStatus status = switch (ex) {
-            case OrdersDomainException.OrderNotFound _ -> HttpStatus.NOT_FOUND;
-            case OrdersDomainException.UnknownSku _ -> HttpStatus.UNPROCESSABLE_CONTENT;
-            case OrdersDomainException.MixedCurrencies _ -> HttpStatus.UNPROCESSABLE_CONTENT;
-            case OrdersDomainException.IllegalOrderState _ -> HttpStatus.CONFLICT;
-            case OrdersDomainException.IdempotencyKeyReused _ -> HttpStatus.CONFLICT;
-            case OrdersDomainException.VersionMismatch _ -> HttpStatus.PRECONDITION_FAILED;
-        };
-        return problemResponse(problems.of(status, status.getReasonPhrase(), ex.getMessage(), request));
+        this.mappers = List.copyOf(mappers);
     }
 
     @ExceptionHandler(Exception.class)
-    ResponseEntity<ProblemDetail> unexpected(Exception ex, HttpServletRequest request) {
+    ResponseEntity<ProblemDetail> unmappedOrDomain(Exception ex, HttpServletRequest request) {
+        Optional<HttpStatusCode> mapped = mappers.stream()
+                .map(mapper -> mapper.statusOf(ex))
+                .flatMap(Optional::stream)
+                .findFirst();
+        if (mapped.isPresent()) {
+            HttpStatusCode status = mapped.get();
+            return problemResponse(problems.of(status, ProblemFactory.reasonPhrase(status), ex.getMessage(), request));
+        }
         log.error("Unhandled exception for {} {}", request.getMethod(), request.getRequestURI(), ex);
         return problemResponse(problems.of(HttpStatus.INTERNAL_SERVER_ERROR, "Internal Server Error",
                 "An unexpected error occurred", request));
@@ -72,21 +74,20 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @Override
     protected ResponseEntity<Object> handleMethodArgumentNotValid(MethodArgumentNotValidException ex,
             HttpHeaders headers, HttpStatusCode status, WebRequest request) {
-        List<FieldError> errors = ex.getBindingResult().getFieldErrors().stream()
+        List<ProblemFieldError> errors = ex.getBindingResult().getFieldErrors().stream()
                 .map(fe -> problems.fieldError(fe.getField(), String.valueOf(fe.getDefaultMessage()), fe.getRejectedValue()))
                 .toList();
         return handleExceptionInternal(ex, validationProblem(errors, request), headers, status, request);
     }
 
     /**
-     * Spring's built-in method validation: constraint violations on parameters, headers and path
-     * variables arrive as plain results, while a {@code @Valid} body that fails arrives as
-     * {@link ParameterErrors} with per-field details.
+     * Spring's built-in method validation: parameter, header and path-variable violations arrive as plain
+     * results, a {@code @Valid} body that fails arrives as {@link ParameterErrors} with per-field details.
      */
     @Override
     protected ResponseEntity<Object> handleHandlerMethodValidationException(HandlerMethodValidationException ex,
             HttpHeaders headers, HttpStatusCode status, WebRequest request) {
-        List<FieldError> errors = ex.getParameterValidationResults().stream()
+        List<ProblemFieldError> errors = ex.getParameterValidationResults().stream()
                 .flatMap(result -> switch (result) {
                     case ParameterErrors body -> body.getFieldErrors().stream()
                             .map(fe -> problems.fieldError(fe.getField(), String.valueOf(fe.getDefaultMessage()), fe.getRejectedValue()));
@@ -98,14 +99,12 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return handleExceptionInternal(ex, validationProblem(errors, request), headers, status, request);
     }
 
-    /** Every response produced by the base class passes through here; make it ours. */
+    /** Every response produced by the base class passes through here. */
     @Override
     protected ResponseEntity<Object> handleExceptionInternal(Exception ex, @Nullable Object body, HttpHeaders headers,
             HttpStatusCode statusCode, WebRequest request) {
-        HttpServletRequest servletRequest = servletRequest(request);
+        HttpServletRequest servletRequest = ((ServletWebRequest) request).getRequest();
         if (body == null && ex instanceof ErrorResponse errorResponse) {
-            // Same contract as the base implementation: the exception carries its own ProblemDetail
-            // (e.g. "Required header 'Idempotency-Key' is not present."), possibly localised.
             body = errorResponse.updateAndGetBody(getMessageSource(), LocaleContextHolder.getLocale());
         }
         ProblemDetail problem = body instanceof ProblemDetail detail
@@ -117,17 +116,13 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return ResponseEntity.status(statusCode).headers(problemHeaders).body(problem);
     }
 
-    private ProblemDetail validationProblem(List<FieldError> errors, WebRequest request) {
+    private ProblemDetail validationProblem(List<ProblemFieldError> errors, WebRequest request) {
         return problems.of(HttpStatus.BAD_REQUEST, "Validation failed", "Request violates the contract",
-                servletRequest(request), errors);
+                ((ServletWebRequest) request).getRequest(), errors);
     }
 
     private static ResponseEntity<ProblemDetail> problemResponse(ProblemDetail problem) {
         return ResponseEntity.status(problem.getStatus()).contentType(MediaType.APPLICATION_PROBLEM_JSON).body(problem);
-    }
-
-    private static HttpServletRequest servletRequest(WebRequest request) {
-        return ((ServletWebRequest) request).getRequest();
     }
 
     /** Reports the name a client sees on the wire (header/query/path name), not the Java parameter name. */

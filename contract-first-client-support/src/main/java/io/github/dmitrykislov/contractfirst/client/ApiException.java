@@ -17,16 +17,27 @@ public class ApiException extends RuntimeException {
     /** Bodies that are not problems (proxy error pages, HTML) are kept only as a short excerpt. */
     public static final int RAW_BODY_EXCERPT_LENGTH = 256;
 
+    private final String group;
     private final HttpStatusCode status;
     private final transient @Nullable ProblemDetail problem;
     private final transient List<ApiFieldError> fieldErrors;
 
-    public ApiException(HttpStatusCode status, @Nullable ProblemDetail problem, List<ApiFieldError> fieldErrors,
+    /**
+     * @param group the HTTP service group (the API) the failure came from; lets callers that use several
+     *              contract clients tell them apart even without a per-API subclass
+     */
+    public ApiException(String group, HttpStatusCode status, @Nullable ProblemDetail problem, List<ApiFieldError> fieldErrors,
             @Nullable String rawBody) {
-        super(describe(status, problem, rawBody));
+        super(describe(group, status, problem, rawBody));
+        this.group = group;
         this.status = status;
         this.problem = problem;
         this.fieldErrors = List.copyOf(fieldErrors);
+    }
+
+    /** Name of the HTTP service group whose call failed. */
+    public String group() {
+        return group;
     }
 
     public HttpStatusCode status() {
@@ -42,12 +53,12 @@ public class ApiException extends RuntimeException {
         return fieldErrors;
     }
 
-    private static String describe(HttpStatusCode status, @Nullable ProblemDetail problem, @Nullable String rawBody) {
+    private static String describe(String group, HttpStatusCode status, @Nullable ProblemDetail problem, @Nullable String rawBody) {
         if (problem != null) {
-            return "%d %s: %s".formatted(status.value(), problem.getTitle(),
+            return "[%s] %d %s: %s".formatted(group, status.value(), problem.getTitle(),
                     problem.getDetail() == null ? "" : problem.getDetail());
         }
-        return "%d with non-problem body: %s".formatted(status.value(), excerpt(rawBody));
+        return "[%s] %d with non-problem body: %s".formatted(group, status.value(), excerpt(rawBody));
     }
 
     private static String excerpt(@Nullable String rawBody) {

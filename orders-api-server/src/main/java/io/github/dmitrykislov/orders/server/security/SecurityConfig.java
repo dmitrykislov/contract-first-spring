@@ -1,44 +1,24 @@
 package io.github.dmitrykislov.orders.server.security;
 
-import io.github.dmitrykislov.orders.server.config.ApiPathProperties;
+import io.github.dmitrykislov.contractfirst.server.security.ApiKeySecurity;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
-import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
-import org.springframework.security.web.authentication.AuthenticationEntryPointFailureHandler;
-import org.springframework.security.web.authentication.AuthenticationFilter;
 
 /**
- * Enforces the contract's {@code ApiKeyAuth} scheme with Spring Security for everything under the API
- * base path: stateless, no CSRF (no browser session to protect), no default login or Basic auth, and
- * authentication failures rendered as the contract's 401 problem by {@link ProblemAuthenticationEntryPoint}.
+ * The contract's {@code ApiKeyAuth} scheme for everything under the API base path. The building
+ * blocks come from {@code contract-first-server-support} and are switched on by
+ * {@code contract-first.server.api-key.keys}; the chain itself stays here so this application decides
+ * what else it protects.
  */
 @Configuration(proxyBeanMethods = false)
 @EnableWebSecurity
 public class SecurityConfig {
 
     @Bean
-    SecurityFilterChain apiSecurity(HttpSecurity http, ApiPathProperties apiPath,
-            ApiKeyAuthenticationManager authenticationManager, ProblemAuthenticationEntryPoint entryPoint) throws Exception {
-        AuthenticationFilter apiKeyFilter = new AuthenticationFilter(authenticationManager, new ApiKeyAuthenticationConverter());
-        apiKeyFilter.setSuccessHandler((request, response, authentication) -> { /* continue the chain */ });
-        apiKeyFilter.setFailureHandler(new AuthenticationEntryPointFailureHandler(entryPoint));
-
-        http.securityMatcher(apiPath.basePath() + "/**")
-                .csrf(AbstractHttpConfigurer::disable)
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .requestCache(AbstractHttpConfigurer::disable)
-                .logout(AbstractHttpConfigurer::disable)
-                .anonymous(AbstractHttpConfigurer::disable)
-                .authorizeHttpRequests(authorize -> authorize.anyRequest().authenticated())
-                .exceptionHandling(handling -> handling.authenticationEntryPoint(entryPoint))
-                .addFilterBefore(apiKeyFilter, AnonymousAuthenticationFilter.class)
-                .headers(Customizer.withDefaults());
-        return http.build();
+    SecurityFilterChain apiSecurity(HttpSecurity http, ApiKeySecurity apiKey) throws Exception {
+        return apiKey.configure(http).build();
     }
 }

@@ -208,7 +208,7 @@ class OrdersApiConformanceTest extends ApiTestBase {
             assertExchangeConforms(result);
             assertThat(result).hasStatus(HttpStatus.NOT_FOUND).hasContentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON);
             Problem problem = fromJson(result, Problem.class);
-            assertThat(problem.getType()).hasToString(ProblemFactory.TYPE_NAMESPACE + "not-found");
+            assertThat(problem.getType()).hasToString("https://orders.example.com/problems/not-found");
             assertThat(problem.getInstance().toString()).endsWith(result.getRequest().getRequestURI()).startsWith("http://");
         }
 

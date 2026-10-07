@@ -53,14 +53,17 @@ public final class ContractClientSupport {
     }
 
     /** The built-in token source for {@code static} and {@code propagate} modes; {@code provider} needs a bean. */
-    public static TokenProvider tokenProvider(AuthProperties auth, Class<? extends TokenProvider> providerType) {
+    public static TokenProvider tokenProvider(AuthProperties auth, String providerDescription) {
         return switch (auth.mode()) {
             case STATIC -> new StaticTokenProvider(Objects.requireNonNull(auth.token(), "validated by AuthProperties"));
             case PROPAGATE -> new PropagatingTokenProvider(auth);
             case PROVIDER -> throw new IllegalStateException(
-                    "auth.mode=provider requires a bean of type " + providerType.getName()
-                            + " that fetches the token, e.g. from your identity provider");
+                    "auth.mode=provider requires " + providerDescription + " that fetches the token, e.g. from your identity provider");
         };
+    }
+
+    public static TokenProvider tokenProvider(AuthProperties auth, Class<? extends TokenProvider> providerType) {
+        return tokenProvider(auth, "a bean of type " + providerType.getName());
     }
 
     public ContractClientSupport auth(AuthProperties auth, TokenProvider tokenProvider) {
@@ -104,7 +107,7 @@ public final class ContractClientSupport {
             builder.requestInterceptor(new TokenHeaderInterceptor(
                     Objects.requireNonNull(tokenProvider, "tokenProvider"), auth));
         }
-        builder.defaultStatusHandler(HttpStatusCode::isError, new ProblemResponseErrorHandler(mapper, exceptions));
+        builder.defaultStatusHandler(HttpStatusCode::isError, new ProblemResponseErrorHandler(group, mapper, exceptions));
     }
 
     /** The same customisation as a Spring Boot HTTP service group configurer for {@code group}. */

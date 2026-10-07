@@ -30,6 +30,11 @@
       <artifactId>spring-boot-starter-security</artifactId>
     </dependency>
     <dependency>
+      <!-- Problem rendering, domain-exception mapping, request ids, JSON policy, API-key building blocks. -->
+      <groupId>io.github.dmitrykislov</groupId>
+      <artifactId>contract-first-server-support</artifactId>
+    </dependency>
+    <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-configuration-processor</artifactId>
       <optional>true</optional>

@@ -24,6 +24,7 @@
 
   <modules>
     <module>contract-first-client-support</module>
+    <module>contract-first-server-support</module>
     <module>contract-first-test-support</module>
     <module>orders-api-spec</module>
     <module>orders-api-client</module>
@@ -56,6 +57,11 @@
       <dependency>
         <groupId>io.github.dmitrykislov</groupId>
         <artifactId>contract-first-client-support</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.github.dmitrykislov</groupId>
+        <artifactId>contract-first-server-support</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>

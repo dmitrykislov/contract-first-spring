@@ -9,6 +9,23 @@ import org.springframework.http.ProblemDetail;
 @FunctionalInterface
 public interface ApiExceptionFactory {
 
-    ApiException create(HttpStatusCode status, @Nullable ProblemDetail problem, List<ApiFieldError> fieldErrors,
+    ApiException create(String group, HttpStatusCode status, @Nullable ProblemDetail problem, List<ApiFieldError> fieldErrors,
             @Nullable String rawBody);
+
+    /** Builds a factory for an {@link ApiException} subclass that exposes the canonical five-argument constructor. */
+    static ApiExceptionFactory forType(Class<? extends ApiException> type) {
+        try {
+            var constructor = type.getConstructor(String.class, HttpStatusCode.class, ProblemDetail.class, List.class, String.class);
+            return (group, status, problem, errors, raw) -> {
+                try {
+                    return constructor.newInstance(group, status, problem, errors, raw);
+                } catch (ReflectiveOperationException e) {
+                    throw new IllegalStateException("Cannot instantiate " + type.getName(), e);
+                }
+            };
+        } catch (NoSuchMethodException e) {
+            throw new IllegalArgumentException(type.getName() + " must declare a public constructor "
+                    + "(String group, HttpStatusCode status, ProblemDetail problem, List<ApiFieldError> fieldErrors, String rawBody)", e);
+        }
+    }
 }

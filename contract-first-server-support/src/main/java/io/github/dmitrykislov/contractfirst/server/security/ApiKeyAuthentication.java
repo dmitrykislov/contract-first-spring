@@ -1,4 +1,4 @@
-package io.github.dmitrykislov.orders.server.security;
+package io.github.dmitrykislov.contractfirst.server.security;
 
 import java.util.List;
 import org.springframework.security.authentication.AbstractAuthenticationToken;
@@ -17,12 +17,10 @@ public final class ApiKeyAuthentication extends AbstractAuthenticationToken {
         setAuthenticated(authenticated);
     }
 
-    /** The unverified key as presented in the request. */
     public static ApiKeyAuthentication presented(String apiKey) {
         return new ApiKeyAuthentication(apiKey, false);
     }
 
-    /** A verified client; the key is replaced by an opaque principal name. */
     public static ApiKeyAuthentication verified() {
         return new ApiKeyAuthentication("api-client", true);
     }

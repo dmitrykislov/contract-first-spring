@@ -49,11 +49,20 @@
       <groupId>org.jspecify</groupId>
       <artifactId>jspecify</artifactId>
     </dependency>
-
     <dependency>
+      <!-- The reusable base tests are JUnit tests; this is a test library, so JUnit is a compile dependency. -->
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
-      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-context</artifactId>
+    </dependency>
+    <dependency>
+      <!-- Compile-only: ServerRouteCoverageSupport reads Spring MVC's handler mappings; server tests have it. -->
+      <groupId>org.springframework</groupId>
+      <artifactId>spring-webmvc</artifactId>
+      <scope>provided</scope>
     </dependency>
   </dependencies>
 </project>

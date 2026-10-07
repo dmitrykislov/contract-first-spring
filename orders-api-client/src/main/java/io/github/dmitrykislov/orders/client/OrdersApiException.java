@@ -14,8 +14,8 @@ import org.springframework.http.ProblemDetail;
  */
 public class OrdersApiException extends ApiException {
 
-    public OrdersApiException(HttpStatusCode status, @Nullable ProblemDetail problem, List<ApiFieldError> fieldErrors,
-            @Nullable String rawBody) {
-        super(status, problem, fieldErrors, rawBody);
+    public OrdersApiException(String group, HttpStatusCode status, @Nullable ProblemDetail problem,
+            List<ApiFieldError> fieldErrors, @Nullable String rawBody) {
+        super(group, status, problem, fieldErrors, rawBody);
     }
 }

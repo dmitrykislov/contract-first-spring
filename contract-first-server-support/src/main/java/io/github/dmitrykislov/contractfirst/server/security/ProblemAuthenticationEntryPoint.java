@@ -1,6 +1,7 @@
-package io.github.dmitrykislov.orders.server.security;
+package io.github.dmitrykislov.contractfirst.server.security;
 
-import io.github.dmitrykislov.orders.server.web.ProblemFactory;
+import io.github.dmitrykislov.contractfirst.server.ContractJson;
+import io.github.dmitrykislov.contractfirst.server.ProblemFactory;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -10,23 +11,18 @@ import org.springframework.http.MediaType;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.AuthenticationEntryPoint;
-import org.springframework.stereotype.Component;
-import tools.jackson.databind.json.JsonMapper;
 
-/**
- * Renders authentication failures as the contract's 401 problem (Spring's {@code ProblemDetail},
- * serialised by Boot's {@code JsonMapper} in RFC 9457 shape), so even rejected requests are
- * spec-conformant.
- */
-@Component
-public class ProblemAuthenticationEntryPoint implements AuthenticationEntryPoint {
+/** Renders authentication failures as a 401 {@code ProblemDetail}, so even rejected requests are spec-conformant. */
+public final class ProblemAuthenticationEntryPoint implements AuthenticationEntryPoint {
 
-    private final JsonMapper jsonMapper;
+    private final ContractJson json;
     private final ProblemFactory problems;
+    private final String headerName;
 
-    public ProblemAuthenticationEntryPoint(JsonMapper jsonMapper, ProblemFactory problems) {
-        this.jsonMapper = jsonMapper;
+    public ProblemAuthenticationEntryPoint(ContractJson json, ProblemFactory problems, String headerName) {
+        this.json = json;
         this.problems = problems;
+        this.headerName = headerName;
     }
 
     @Override
@@ -34,11 +30,11 @@ public class ProblemAuthenticationEntryPoint implements AuthenticationEntryPoint
             throws IOException {
         String detail = exception instanceof BadCredentialsException
                 ? "Unrecognised API key"
-                : "Missing %s header".formatted(ApiKeyAuthenticationConverter.HEADER);
+                : "Missing %s header".formatted(headerName);
         response.setStatus(HttpStatus.UNAUTHORIZED.value());
         response.setContentType(MediaType.APPLICATION_PROBLEM_JSON_VALUE);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
-        jsonMapper.writeValue(response.getOutputStream(),
+        json.mapper().writeValue(response.getOutputStream(),
                 problems.of(HttpStatus.UNAUTHORIZED, "Unauthorized", detail, request));
     }
 }

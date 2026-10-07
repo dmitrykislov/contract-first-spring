@@ -48,9 +48,9 @@ import org.springframework.http.ResponseEntity;
  * contract on the way out and on the way back in.
  */
 @SpringBootTest(classes = OrdersServerApplication.class, webEnvironment = WebEnvironment.RANDOM_PORT, properties = {
-        "orders.server.security.api-keys=e2e-key",
+        "contract-first.server.api-key.keys=e2e-key",
         // The server JVM also has the client jar on its classpath; keep its context free of client beans.
-        "spring.autoconfigure.exclude=io.github.dmitrykislov.orders.client.OrdersClientAutoConfiguration"
+        "spring.autoconfigure.exclude=io.github.dmitrykislov.orders.client.OrdersClient"
 })
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class OrdersEndToEndIT {
@@ -87,7 +87,7 @@ class OrdersEndToEndIT {
                         "spring.http.serviceclient.orders.base-url=http://localhost:" + port + "/api/v1",
                         "spring.http.serviceclient.orders.connect-timeout=2s",
                         "spring.http.serviceclient.orders.read-timeout=5s",
-                        "orders.client.auth.token=" + apiKey)
+                        "contract-first.clients.orders.auth.token=" + apiKey)
                 .run();
     }
 
@@ -259,7 +259,7 @@ class OrdersEndToEndIT {
         try (ConfigurableApplicationContext propagating = new SpringApplicationBuilder(ContractValidatingClientApplication.class)
                 .web(WebApplicationType.NONE)
                 .properties("spring.http.serviceclient.orders.base-url=http://localhost:" + port + "/api/v1",
-                        "orders.client.auth.mode=propagate")
+                        "contract-first.clients.orders.auth.mode=propagate")
                 .run()) {
             CatalogApi propagatingCatalog = propagating.getBean(CatalogApi.class);
 
@@ -280,7 +280,7 @@ class OrdersEndToEndIT {
         try (ConfigurableApplicationContext providing = new SpringApplicationBuilder(TokenFetchingClientApplication.class)
                 .web(WebApplicationType.NONE)
                 .properties("spring.http.serviceclient.orders.base-url=http://localhost:" + port + "/api/v1",
-                        "orders.client.auth.mode=provider",
+                        "contract-first.clients.orders.auth.mode=provider",
                         "e2e.vault.token=e2e-key")
                 .run()) {
             CatalogApi providingCatalog = providing.getBean(CatalogApi.class);

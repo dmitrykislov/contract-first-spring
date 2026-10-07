@@ -12,18 +12,19 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
+import io.github.dmitrykislov.contractfirst.server.ContractJson;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Boots the whole server (filters, advice, converters) against MockMvc. The in-memory store is shared
  * across tests in a context, so tests create their own orders rather than assuming an empty store.
  */
-@SpringBootTest(properties = "orders.server.security.api-keys=" + Fixtures.API_KEY)
+@SpringBootTest(properties = "contract-first.server.api-key.keys=" + Fixtures.API_KEY)
 @AutoConfigureMockMvc
 public abstract class ApiTestBase {
 
     /** One shared contract instance per JVM: one validator, one coverage record across all test classes. */
-    protected static final Contract CONTRACT = Contract.fromClasspath(OrdersContract.RESOURCE, OrdersContract.BASE_PATH);
+    public static final Contract CONTRACT = Contract.fromClasspath(OrdersContract.RESOURCE, OrdersContract.BASE_PATH);
 
     protected static void assertExchangeConforms(MvcTestResult result) {
         CONTRACT.mockMvc().assertExchangeConforms(result);
@@ -36,8 +37,13 @@ public abstract class ApiTestBase {
     @Autowired
     protected MockMvcTester mvc;
 
-    @Autowired
+    /** The HTTP-boundary mapper (NON_NULL, JsonNullable), the same one Spring MVC uses for the API. */
     protected JsonMapper json;
+
+    @Autowired
+    void contractJson(ContractJson contractJson) {
+        this.json = contractJson.mapper();
+    }
 
     protected String url(String path) {
         return OrdersContract.BASE_PATH + path;

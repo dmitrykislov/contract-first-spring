@@ -31,7 +31,7 @@ contract-first-spring/
 
 ```bash
 git clone https://github.com/dmitrykislov/contract-first-spring.git && cd contract-first-spring
-mvn verify                       # generates code, compiles, runs 162 tests; every HTTP exchange is checked against the spec
+mvn verify                       # generates code, compiles, runs 166 tests; every HTTP exchange is checked against the spec
 java -jar examples/orders-api/server/target/example-orders-api-server-1.0.0-SNAPSHOT-exec.jar
 curl -s -H 'X-API-Key: dev-api-key-1' localhost:8080/api/v1/catalog/products/WIDGET-BLUE-L
 ```
@@ -45,10 +45,12 @@ curl -s -H 'X-API-Key: dev-api-key-1' localhost:8080/api/v1/catalog/products/WID
 5. [How we know both sides follow the spec](#5-how-we-know-both-sides-follow-the-spec)
 6. [Onboarding a new OpenAPI spec, step by step](#6-onboarding-a-new-openapi-spec-step-by-step)
 7. [Modules and dependencies](#7-modules-and-dependencies)
-8. [Configuration reference](#8-configuration-reference)
-9. [Day two: when the spec changes](#9-day-two-when-the-spec-changes)
-10. [Build and run](#10-build-and-run)
-11. [Libraries used and why](#11-libraries-used-and-why)
+8. [What the libraries give you, and what you still write](#8-what-the-libraries-give-you-and-what-you-still-write)
+9. [Tests: what exists, what a new API adds](#9-tests-what-exists-what-a-new-api-adds)
+10. [Configuration reference](#10-configuration-reference)
+11. [Day two: when the spec changes](#11-day-two-when-the-spec-changes)
+12. [Build and run](#12-build-and-run)
+13. [Libraries used and why](#13-libraries-used-and-why)
 
 ---
 
@@ -87,7 +89,8 @@ flowchart LR
 ```
 
 **How to read it.** Every `mvn` build parses the YAML and renders four sets of Java sources into `target/` (never
-committed). The two left outputs become the client jar that consumers depend on; the two right outputs become the
+committed). The generating is done by the OpenAPI Generator Maven plugin, configured in each module's POM; the
+`libs/` libraries do not generate anything, they make the generated code work at runtime and prove it at test time. The two left outputs become the client jar that consumers depend on; the two right outputs become the
 server. Client and server get their *own* copies of the models, in different packages, because they are separate
 deployables that release on their own schedules.
 
@@ -264,7 +267,8 @@ flowchart TB
    fields omitted, `JsonNullable` understood) derived from the application's mapper, which itself stays untouched for
    messaging, caching or logging.
 6. **The domain is plain Java.** `OrderService`, `OrderDraft`, `StoredOrder` and `Change<T>` (keep/set/clear for
-   JSON Merge Patch) know nothing about HTTP; `OrderMapper` translates at the boundary.
+   JSON Merge Patch) know nothing about HTTP. `OrderMapper` and `ProductMapper` translate at the boundary; they are
+   stateless static functions, not beans, so there is nothing to inject or mock and they are unit-tested directly.
 
 ## 5. How we know both sides follow the spec
 
@@ -571,7 +575,68 @@ compile time, and the server never depends on the client.
 
 Reactor order: client-starter → server-starter → test-support → spec → client → server → e2e.
 
-## 8. Configuration reference
+## 8. What the libraries give you, and what you still write
+
+Plain answer, concern by concern. "Starter" means: add the dependency, the beans appear, properties configure them.
+
+| Concern | Who provides it | What you write |
+|---------|-----------------|----------------|
+| Generating models, client interfaces, server interfaces from the YAML | **OpenAPI Generator Maven plugin**, one execution per module (copy from the example POMs) | the two package names and the path to your YAML |
+| Turning generated `@HttpExchange` interfaces into Spring beans | `contract-first-client-starter`: `@EnableContractClient` | one annotated class |
+| Base URL, connect/read timeouts, redirects, TLS, default headers of a client | **Spring Boot** (`spring.http.serviceclient.<group>.*`) | properties |
+| Sending the token: fixed, forwarded from the caller, or fetched by your code | `contract-first-client-starter`: `TokenHeaderInterceptor`, `StaticTokenProvider`, `PropagatingTokenProvider`, `CachingTokenProvider`, `TokenContext` | properties; in `provider` mode one `TokenProvider` bean |
+| Retrying idempotent calls on 502/503/504 and connection errors | `contract-first-client-starter`: `RetryingRequestInterceptor` | properties (or nothing: on by default) |
+| Carrying the correlation id from the MDC onto outgoing calls | `contract-first-client-starter`: `RequestIdPropagationInterceptor` | nothing |
+| JSON that matches the schema (no `null` for unset optional fields, `JsonNullable` for nullable ones) | both starters (`ContractClientCustomizer`, `ContractJsonMapper`) | nothing |
+| Turning 4xx/5xx into a typed exception with the decoded `ProblemDetail` and field errors | `contract-first-client-starter`: `ProblemResponseErrorHandler`, `ApiException` | optionally a one-line subclass per API |
+| Routing and validating requests on the server | **Spring MVC**, driven by the annotations on the generated interface | controllers that implement the interface |
+| Rendering every server failure as `ProblemDetail` with your `type` namespace and absolute `instance` | `contract-first-server-starter`: `ProblemDetailExceptionHandler`, `ProblemFactory` | one `DomainExceptionMapper` bean (which exception is which status) |
+| Correlation id on the server: echo, generate, publish to MDC | `contract-first-server-starter`: `RequestIdFilter` | nothing |
+| API-key authentication | `contract-first-server-starter`: converter, constant-time manager, `ProblemDetail` entry point, `ApiKeySecurityConfigurer`; **Spring Security** runs it | one `SecurityFilterChain` bean of one statement, plus the accepted keys as a property |
+| Any other authentication (OAuth2, mTLS) | **Spring Security** | your own chain; keep the starter's entry point for problem-shaped 401s |
+| Business logic | you | the domain |
+| Checking an HTTP exchange against the YAML (status, headers, media type, body schema) | `contract-first-test-support`: `Contract`, `MockMvcContractAssertions`, `ContractValidatingInterceptor` | one `Contract.fromClasspath(...)` constant |
+| Proving every operation is routed, every operation is on the client, every documented response was produced, every operation rejects a missing credential | `contract-first-test-support`: four `Abstract*Test` base classes | one three-line subclass each |
+| Guarding the YAML against incompatible edits | **openapi-diff** in the CI workflow | nothing beyond keeping the job |
+
+What the libraries deliberately do **not** do: generate code, define a `SecurityFilterChain`, change your
+application's global Jackson settings, or know anything about any particular API.
+
+## 9. Tests: what exists, what a new API adds
+
+### Already there
+
+The libraries test themselves; you inherit this with the dependency.
+
+| Module | Tests | What they prove |
+|--------|------:|-----------------|
+| `contract-first-client-starter` | 36 | token modes (static, propagate from request or `TokenContext`, provider bean, caching, scheme stripping, failures before sending), retries (statuses, `IOException`, idempotency rules, backoff), request-id propagation, problem decoding and field errors, the `@EnableContractClient` wiring on a hand-written interface, defaults layering, disabled groups, misspelt groups |
+| `contract-first-server-starter` | 19 | domain-mapper precedence, 500 without leaking messages, non-standard statuses, problem factory with `https` and `urn:` namespaces, request-id filter, properties normalisation, which beans exist with and without keys, YAML-list and comma forms of keys, nothing in non-web contexts, JSON policy not touching the global mapper, constant-time key check, entry point output |
+| `contract-first-test-support` | 4 | operation listing, request matching, instance caching, interceptor validation and coverage recording |
+
+The example shows what a finished API looks like.
+
+| Module | Tests | What they prove |
+|--------|------:|-----------------|
+| `example-orders-api-spec` | 6 | the YAML is valid, every operation has an id and a 401, every error is `problem+json`, version matches the artifact |
+| `example-orders-api-client` | 26 | behaviour of the generated client against a mock server (every parameter kind, headers, bodies, errors, retries, request id); the three token modes through the real wiring; every operation is on a client interface |
+| `example-orders-api-server` | 66 | one or more MockMvc tests per operation and error path, each validated against the YAML; the domain service and the mappers in isolation; the server boots from its own `application.yaml`; every operation is routed; every documented response was produced; every operation rejects a missing key |
+| `example-orders-api-e2e` | 9 | real server, generated client, every exchange validated on the client side; lifecycle, business errors, wrong key, propagate and provider modes, correlation id round trip |
+
+### What you add for a new API
+
+| You write | Because |
+|-----------|---------|
+| A lint test for your YAML (copy `OrdersApiSpecTest`) | catches spec mistakes before generation |
+| MockMvc tests for **your** operations and error paths, each calling `assertExchangeConforms` | this is the part nobody can write for you: it is your behaviour; the validator makes each test also a contract check |
+| Unit tests for your domain logic and mappers | ordinary unit tests; the mappers are static functions, so no Spring context |
+| Four three-line subclasses of the `Abstract*Test` classes | route coverage, client coverage, documented-response coverage, missing-credential rejection, all generic |
+| An end-to-end test (copy `OrdersEndToEndIT`) | proves the published client and the deployed server agree over real HTTP |
+
+You do not re-test token handling, retries, problem rendering, request ids or security plumbing: those tests ship in
+the libraries.
+
+## 10. Configuration reference
 
 Everything below is a property; the client jar contains no environment-specific values.
 
@@ -617,7 +682,7 @@ If no token can be resolved, or the provider throws, the call fails before anyth
 | `api-key.accepted-keys` | *(unset)* | keys the server accepts, comma-separated or a YAML list; setting it creates the API-key security beans, leaving it unset creates none |
 | `api-key.header-name` | `X-API-Key` | header carrying the key |
 
-## 9. Day two: when the spec changes
+## 11. Day two: when the spec changes
 
 ```mermaid
 flowchart LR
@@ -636,7 +701,7 @@ regeneration the compiler, the route coverage test and the response coverage tes
 what still has to be done. Consumers upgrade by bumping the client jar version, which always equals the contract
 version (a lint test enforces this).
 
-## 10. Build and run
+## 12. Build and run
 
 ```bash
 mvn verify                                 # generate, compile, unit + MockMvc tests (Surefire), end-to-end (Failsafe)
@@ -659,7 +724,7 @@ major. A binary-compatibility check (japicmp) is to be added to CI against the f
 The sample uses `example.com` hosts and demo API keys in `application.yaml`; the `io.github.dmitrykislov`
 coordinates are the only repository-specific detail.
 
-## 11. Libraries used and why
+## 13. Libraries used and why
 
 | Need | Choice | Why this one |
 |------|--------|--------------|

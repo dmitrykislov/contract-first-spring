@@ -30,32 +30,30 @@ import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 public class OrdersController implements OrdersApi {
 
     private final OrderService orders;
-    private final OrderMapper mapper;
 
-    public OrdersController(OrderService orders, OrderMapper mapper) {
+    public OrdersController(OrderService orders) {
         this.orders = orders;
-        this.mapper = mapper;
     }
 
     @Override
     public ResponseEntity<OrderPage> listOrders(@Nullable UUID xRequestId, @Nullable OrderStatus status,
             @Nullable UUID customerId, @Nullable OffsetDateTime createdAfter, @Nullable List<String> tag,
             Integer page, Integer size) {
-        return ResponseEntity.ok(mapper.toApi(orders.list(mapper.toQuery(status, customerId, createdAfter, tag, page, size))));
+        return ResponseEntity.ok(OrderMapper.toApi(orders.list(OrderMapper.toQuery(status, customerId, createdAfter, tag, page, size))));
     }
 
     /** A replay with the same key and payload returns the original 201, as the contract promises. */
     @Override
     public ResponseEntity<Order> createOrder(String idempotencyKey, CreateOrderRequest request, @Nullable UUID xRequestId) {
-        OrderService.CreationResult result = orders.create(idempotencyKey, mapper.toDraft(request));
+        OrderService.CreationResult result = orders.create(idempotencyKey, OrderMapper.toDraft(request));
         URI location = ServletUriComponentsBuilder.fromCurrentRequest().path("/{id}").build(result.order().id());
-        return ResponseEntity.created(location).body(mapper.toApi(result.order()));
+        return ResponseEntity.created(location).body(OrderMapper.toApi(result.order()));
     }
 
     @Override
     public ResponseEntity<Order> getOrder(UUID orderId, @Nullable UUID xRequestId) {
         StoredOrder order = orders.get(orderId);
-        return ResponseEntity.ok().eTag(etag(order)).body(mapper.toApi(order));
+        return ResponseEntity.ok().eTag(etag(order)).body(OrderMapper.toApi(order));
     }
 
     @Override
@@ -64,18 +62,18 @@ public class OrdersController implements OrdersApi {
         StoredOrder updated = orders.replace(
                 orderId,
                 parseIfMatch(ifMatch),
-                mapper.lines(request),
-                mapper.toDomain(request.getShippingAddress()),
+                OrderMapper.lines(request),
+                OrderMapper.toDomain(request.getShippingAddress()),
                 request.getNotes(),
-                mapper.tags(request.getTags()));
-        return ResponseEntity.ok().eTag(etag(updated)).body(mapper.toApi(updated));
+                OrderMapper.tags(request.getTags()));
+        return ResponseEntity.ok().eTag(etag(updated)).body(OrderMapper.toApi(updated));
     }
 
     @Override
     public ResponseEntity<Order> patchOrder(UUID orderId, OrderPatch patch, @Nullable UUID xRequestId) {
         StoredOrder updated = orders.patch(orderId,
-                mapper.addressChange(patch), mapper.notesChange(patch), mapper.tagsChange(patch));
-        return ResponseEntity.ok().eTag(etag(updated)).body(mapper.toApi(updated));
+                OrderMapper.addressChange(patch), OrderMapper.notesChange(patch), OrderMapper.tagsChange(patch));
+        return ResponseEntity.ok().eTag(etag(updated)).body(OrderMapper.toApi(updated));
     }
 
     @Override
@@ -87,7 +85,7 @@ public class OrdersController implements OrdersApi {
     @Override
     public ResponseEntity<Order> submitOrder(UUID orderId, @Nullable UUID xRequestId) {
         StoredOrder submitted = orders.submit(orderId);
-        return ResponseEntity.ok().eTag(etag(submitted)).body(mapper.toApi(submitted));
+        return ResponseEntity.ok().eTag(etag(submitted)).body(OrderMapper.toApi(submitted));
     }
 
     static String etag(StoredOrder order) {

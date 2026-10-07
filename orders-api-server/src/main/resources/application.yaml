@@ -1,0 +1,28 @@
+spring:
+  application:
+    name: orders-api-server
+  mvc:
+    problemdetails:
+      enabled: false   # ApiExceptionHandler extends ResponseEntityExceptionHandler itself, with the API's type namespace
+
+server:
+  port: 8080
+  error:
+    include-message: never
+    include-stacktrace: never
+
+openapi:
+  orders:
+    base-path: /api/v1   # read by the generated @RequestMapping placeholder and by ApiKeyAuthenticationFilter
+
+orders:
+  server:
+    security:
+      # Static demo keys. In a real deployment inject these from a secret store.
+      api-keys:
+        - dev-api-key-1
+        - dev-api-key-2
+
+logging:
+  level:
+    io.github.dmitrykislov.orders: INFO

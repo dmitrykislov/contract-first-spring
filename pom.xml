@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>4.1.1</version>
+    <relativePath/>
+  </parent>
+
+  <groupId>io.github.dmitrykislov</groupId>
+  <artifactId>contract-first-spring</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+  <packaging>pom</packaging>
+  <name>contract-first-spring</name>
+  <description>
+    Contract-first toolkit: OpenAPI spec -> generated Java models, Spring Boot 4 declarative HTTP clients,
+    server API interfaces, and spec-conformance tests.
+  </description>
+
+  <modules>
+    <module>orders-api-spec</module>
+    <module>orders-api-test-support</module>
+    <module>orders-api-client</module>
+    <module>orders-api-server</module>
+    <module>orders-api-e2e</module>
+  </modules>
+
+  <properties>
+    <java.version>25</java.version>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+    <openapi-generator.version>7.26.0</openapi-generator.version>
+    <jackson-databind-nullable.version>0.2.12</jackson-databind-nullable.version>
+    <maven-enforcer-plugin.version>3.6.1</maven-enforcer-plugin.version>
+    <openapi-request-validator.version>3.0.0</openapi-request-validator.version>
+    <swagger-parser.version>2.1.48</swagger-parser.version>
+
+    <!-- Single source of truth for the contract, shared by all generator executions. -->
+    <orders.spec.file>${maven.multiModuleProjectDirectory}/orders-api-spec/src/main/resources/openapi/orders-api.yaml</orders.spec.file>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>io.github.dmitrykislov</groupId>
+        <artifactId>orders-api-spec</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.github.dmitrykislov</groupId>
+        <artifactId>orders-api-test-support</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.github.dmitrykislov</groupId>
+        <artifactId>orders-api-client</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.github.dmitrykislov</groupId>
+        <artifactId>orders-api-server</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.atlassian.oai</groupId>
+        <artifactId>openapi-request-validator-core</artifactId>
+        <version>${openapi-request-validator.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.openapitools</groupId>
+        <artifactId>jackson-databind-nullable</artifactId>
+        <version>${jackson-databind-nullable.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>io.swagger.parser.v3</groupId>
+        <artifactId>swagger-parser</artifactId>
+        <version>${swagger-parser.version}</version>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-enforcer-plugin</artifactId>
+        <version>${maven-enforcer-plugin.version}</version>
+        <executions>
+          <execution>
+            <id>enforce-toolchain</id>
+            <goals>
+              <goal>enforce</goal>
+            </goals>
+            <configuration>
+              <rules>
+                <requireJavaVersion>
+                  <version>[25,)</version>
+                </requireJavaVersion>
+                <requireMavenVersion>
+                  <version>[3.9,)</version>
+                </requireMavenVersion>
+                <banDuplicatePomDependencyVersions/>
+              </rules>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+    <pluginManagement>
+      <plugins>
+        <plugin>
+          <groupId>org.openapitools</groupId>
+          <artifactId>openapi-generator-maven-plugin</artifactId>
+          <version>${openapi-generator.version}</version>
+          <configuration>
+            <inputSpec>${orders.spec.file}</inputSpec>
+            <generatorName>spring</generatorName>
+            <generateSupportingFiles>false</generateSupportingFiles>
+            <skipValidateSpec>false</skipValidateSpec>
+            <configOptions>
+              <useSpringBoot4>true</useSpringBoot4>
+              <useJackson3>true</useJackson3>
+              <!-- 'nullable: true' properties become JsonNullable so PATCH can tell absent from null (RFC 7396). -->
+              <openApiNullable>true</openApiNullable>
+              <!-- Absent arrays/maps bind to null instead of empty, so PATCH can tell "not sent" from "cleared". -->
+              <containerDefaultToNull>true</containerDefaultToNull>
+              <useTags>true</useTags>
+              <useBeanValidation>true</useBeanValidation>
+              <useSpringBuiltInValidation>true</useSpringBuiltInValidation>
+              <generateBuilders>true</generateBuilders>
+              <generatedConstructorWithRequiredArgs>true</generatedConstructorWithRequiredArgs>
+              <documentationProvider>none</documentationProvider>
+              <annotationLibrary>none</annotationLibrary>
+              <dateLibrary>java8</dateLibrary>
+              <serializableModel>false</serializableModel>
+            </configOptions>
+          </configuration>
+        </plugin>
+      </plugins>
+    </pluginManagement>
+  </build>
+</project>

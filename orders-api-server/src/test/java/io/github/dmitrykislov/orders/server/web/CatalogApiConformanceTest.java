@@ -1,7 +1,5 @@
 package io.github.dmitrykislov.orders.server.web;
 
-import static io.github.dmitrykislov.orders.testsupport.MockMvcContract.assertExchangeConforms;
-import static io.github.dmitrykislov.orders.testsupport.MockMvcContract.assertResponseConforms;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.dmitrykislov.orders.server.model.Problem;

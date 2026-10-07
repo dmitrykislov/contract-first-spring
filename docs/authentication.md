@@ -2,8 +2,14 @@
 
 The Orders contract declares one security scheme, an API key in the `X-API-Key` header, and the generated
 `@HttpExchange` interfaces know nothing about it: security requirements are not parameters, so the generator leaves
-them out. The client library adds a per-request interceptor that resolves a token through an `OrdersTokenProvider`
-and writes it to the configured header. Everything below is about choosing and shaping that provider.
+them out. The shared runtime in `contract-first-client-support` adds a per-request interceptor that resolves a token
+through a `TokenProvider` and writes it to the configured header. The Orders client narrows that to its own marker
+type `OrdersTokenProvider` so an application with several contract clients can define one provider bean per API.
+Everything below is about choosing and shaping that provider.
+
+Classes referenced below live in `io.github.dmitrykislov.contractfirst.client.auth` (`TokenProvider`,
+`TokenContext`, `CachingTokenProvider`, `ClientAuthenticationException`) and `io.github.dmitrykislov.orders.client`
+(`OrdersTokenProvider`, `OrdersApiException`).
 
 Settings live under `orders.client.auth`:
 
@@ -15,7 +21,7 @@ Settings live under `orders.client.auth`:
 | `scheme` | *(empty)* | optional scheme written before the token, e.g. `Bearer` |
 
 Any mode can be overridden by defining your own `OrdersTokenProvider` bean. If no token can be resolved the call
-fails before anything is sent, with `OrdersClientAuthenticationException` naming the mode and the remedy.
+fails before anything is sent, with `ClientAuthenticationException` naming the mode and the remedy.
 
 ---
 
@@ -394,7 +400,7 @@ A token that could not be resolved at all never reaches the network:
 ```java
 try {
     orders.getOrder(id, null);
-} catch (OrdersClientAuthenticationException e) {
+} catch (ClientAuthenticationException e) {
     // "No token available for GET http://... (mode PROPAGATE): wrap the call in TokenContext.with(token, ...) ..."
 }
 ```

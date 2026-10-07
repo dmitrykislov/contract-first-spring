@@ -3,7 +3,9 @@ package io.github.dmitrykislov.orders.server.web;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeFalse;
 
-import io.github.dmitrykislov.orders.testsupport.ContractCoverage;
+import io.github.dmitrykislov.contractfirst.testing.Contract;
+import io.github.dmitrykislov.contractfirst.testing.ContractCoverage;
+import io.github.dmitrykislov.orders.spec.OrdersContract;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 
@@ -17,10 +19,10 @@ class DocumentedResponsesCoverageTest {
 
     @Test
     void everyDocumentedResponseOfEveryOperationWasExercised() {
-        assumeFalse(ContractCoverage.observed().isEmpty(),
-                "no exchanges recorded: run the whole server test suite, not this class alone");
+        ContractCoverage coverage = Contract.fromClasspath(OrdersContract.RESOURCE, OrdersContract.BASE_PATH).coverage();
+        assumeFalse(coverage.isEmpty(), "no exchanges recorded: run the whole server test suite, not this class alone");
 
-        assertThat(ContractCoverage.uncovered())
+        assertThat(coverage.uncovered())
                 .as("documented responses no conformance test produced")
                 .isEmpty();
     }

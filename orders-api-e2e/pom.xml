@@ -6,7 +6,7 @@
   <parent>
     <groupId>io.github.dmitrykislov</groupId>
     <artifactId>contract-first-spring</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>1.0.0-SNAPSHOT</version>
   </parent>
 
   <artifactId>orders-api-e2e</artifactId>
@@ -28,8 +28,14 @@
       <scope>test</scope>
     </dependency>
     <dependency>
+      <!-- The contract itself (YAML + OrdersContract constants), used by the conformance tests. -->
       <groupId>io.github.dmitrykislov</groupId>
-      <artifactId>orders-api-test-support</artifactId>
+      <artifactId>orders-api-spec</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>io.github.dmitrykislov</groupId>
+      <artifactId>contract-first-test-support</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>

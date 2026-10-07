@@ -1,6 +1,6 @@
 package io.github.dmitrykislov.orders.e2e;
 
-import io.github.dmitrykislov.orders.client.auth.OrdersTokenProvider;
+import io.github.dmitrykislov.orders.client.OrdersTokenProvider;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.springframework.beans.factory.annotation.Value;

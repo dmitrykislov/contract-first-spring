@@ -3,8 +3,7 @@ package io.github.dmitrykislov.orders.server.web;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.dmitrykislov.orders.server.support.ApiTestBase;
-import io.github.dmitrykislov.orders.testsupport.ContractOperation;
-import io.github.dmitrykislov.orders.testsupport.OrdersContract;
+import io.github.dmitrykislov.orders.spec.OrdersContract;
 import java.util.Set;
 import java.util.TreeSet;
 import org.junit.jupiter.api.Test;
@@ -25,7 +24,7 @@ class ContractCoverageTest extends ApiTestBase {
     @Test
     void everyContractOperationIsMappedExactlyOnce() {
         Set<String> expected = new TreeSet<>();
-        ContractOperation.all().forEach(op -> expected.add(op.route(OrdersContract.BASE_PATH)));
+        CONTRACT.operations().forEach(op -> expected.add(op.route(OrdersContract.BASE_PATH)));
 
         Set<String> actual = new TreeSet<>();
         for (RequestMappingInfo info : handlerMapping.getHandlerMethods().keySet()) {

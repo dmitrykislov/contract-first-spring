@@ -4,9 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.dmitrykislov.orders.client.OrdersApiException;
-import io.github.dmitrykislov.orders.client.auth.OrdersClientAuthenticationException;
-import io.github.dmitrykislov.orders.client.auth.TokenContext;
-import io.github.dmitrykislov.orders.testsupport.ContractValidatingInterceptor;
+import io.github.dmitrykislov.contractfirst.client.auth.ClientAuthenticationException;
+import io.github.dmitrykislov.contractfirst.client.auth.TokenContext;
+import io.github.dmitrykislov.contractfirst.testing.ContractValidatingInterceptor;
 import io.github.dmitrykislov.orders.client.api.CatalogApi;
 import io.github.dmitrykislov.orders.client.api.OrdersApi;
 import io.github.dmitrykislov.orders.client.model.Address;
@@ -213,8 +213,8 @@ class OrdersEndToEndIT {
                     .isInstanceOfSatisfying(OrdersApiException.class, ex -> {
                         assertThat(ex.status()).isEqualTo(HttpStatus.BAD_REQUEST);
                         assertThat(ex.fieldErrors()).anySatisfy(e -> {
-                            assertThat(e.getField()).isEqualTo("lines[0].quantity");
-                            assertThat(e.getRejectedValue()).isEqualTo("0");
+                            assertThat(e.field()).isEqualTo("lines[0].quantity");
+                            assertThat(e.rejectedValue()).isEqualTo("0");
                         });
                     });
         }
@@ -226,6 +226,19 @@ class OrdersEndToEndIT {
         assertThatThrownBy(() -> orders.createOrder("short", createRequest(), null))
                 .isInstanceOf(ContractValidatingInterceptor.ContractViolationException.class)
                 .hasMessageContaining("Idempotency-Key");
+    }
+
+    @Test
+    @DisplayName("the correlation id in the caller's MDC travels to the server and back")
+    void requestIdFromMdcIsPropagatedEndToEnd() {
+        UUID correlation = UUID.randomUUID();
+        org.slf4j.MDC.put("requestId", correlation.toString());
+        try {
+            ResponseEntity<Product> response = catalog.getProduct("WIDGET-BLUE-L", "en");
+            assertThat(response.getHeaders().getFirst("X-Request-Id")).isEqualTo(correlation.toString());
+        } finally {
+            org.slf4j.MDC.clear();
+        }
     }
 
     @Test
@@ -257,7 +270,7 @@ class OrdersEndToEndIT {
             assertThatThrownBy(() -> TokenContext.with("wrong", () -> propagatingCatalog.getProduct("GADGET-X1", "en")))
                     .isInstanceOfSatisfying(OrdersApiException.class, ex -> assertThat(ex.status()).isEqualTo(HttpStatus.UNAUTHORIZED));
             assertThatThrownBy(() -> propagatingCatalog.getProduct("GADGET-X1", "en"))
-                    .isInstanceOf(OrdersClientAuthenticationException.class);
+                    .isInstanceOf(ClientAuthenticationException.class);
         }
     }
 

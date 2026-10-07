@@ -6,7 +6,7 @@
   <parent>
     <groupId>io.github.dmitrykislov</groupId>
     <artifactId>contract-first-spring</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>1.0.0-SNAPSHOT</version>
   </parent>
 
   <artifactId>orders-api-client</artifactId>
@@ -26,8 +26,9 @@
       <artifactId>spring-boot-starter-jackson</artifactId>
     </dependency>
     <dependency>
-      <groupId>org.openapitools</groupId>
-      <artifactId>jackson-databind-nullable</artifactId>
+      <!-- Token strategies, retries, request-id propagation, ProblemDetail error mapping, JSON policy. -->
+      <groupId>io.github.dmitrykislov</groupId>
+      <artifactId>contract-first-client-support</artifactId>
     </dependency>
     <dependency>
       <!-- API only, no provider: the generator still marks required model properties @NotNull, which is
@@ -38,13 +39,6 @@
     <dependency>
       <groupId>jakarta.annotation</groupId>
       <artifactId>jakarta.annotation-api</artifactId>
-    </dependency>
-    <dependency>
-      <!-- Compile-only: 'propagate' mode reads the caller's header when running inside a servlet request.
-           Web applications already have it at runtime; non-web consumers never load that code path. -->
-      <groupId>jakarta.servlet</groupId>
-      <artifactId>jakarta.servlet-api</artifactId>
-      <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>org.springframework.boot</groupId>
@@ -59,7 +53,19 @@
     </dependency>
     <dependency>
       <groupId>io.github.dmitrykislov</groupId>
-      <artifactId>orders-api-test-support</artifactId>
+      <artifactId>contract-first-test-support</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <!-- Propagation tests simulate an incoming servlet request. -->
+      <groupId>jakarta.servlet</groupId>
+      <artifactId>jakarta.servlet-api</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <!-- Only to read the contract in ClientContractCoverageTest; consumers never need it. -->
+      <groupId>io.github.dmitrykislov</groupId>
+      <artifactId>orders-api-spec</artifactId>
       <scope>test</scope>
     </dependency>
   </dependencies>

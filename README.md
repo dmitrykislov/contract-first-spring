@@ -6,11 +6,13 @@
 
 **One OpenAPI document. From it, every build produces the Java models, Spring declarative HTTP clients that are
 configured purely by properties, the server interfaces that controllers must implement, and tests that prove client
-and server both follow the contract.**
+and server both follow the contract.** Two small reusable libraries, `contract-first-client-support` and
+`contract-first-test-support`, hold everything that is not specific to one API, so the next contract costs about
+forty lines of auto-configuration.
 
 ```bash
 git clone https://github.com/dmitrykislov/contract-first-spring.git && cd contract-first-spring
-mvn verify     # generate → compile → 100+ tests, every HTTP exchange validated against the spec
+mvn verify     # generate → compile → 130+ tests, every HTTP exchange validated against the spec
 ```
 
 ## Contents
@@ -22,9 +24,10 @@ mvn verify     # generate → compile → 100+ tests, every HTTP exchange valida
 5. [From OpenAPI spec to server controllers](#5-from-openapi-spec-to-server-controllers)
 6. [How we know both sides follow the spec](#6-how-we-know-both-sides-follow-the-spec)
 7. [Modules and who depends on what](#7-modules-and-who-depends-on-what)
-8. [Build, run, adapt](#8-build-run-adapt)
-9. [Libraries chosen and why](#9-libraries-chosen-and-why)
-10. [Defects the conformance tests caught](#10-defects-the-conformance-tests-caught)
+8. [Reusing this for your own API](#8-reusing-this-for-your-own-api)
+9. [Build, run, adapt](#9-build-run-adapt)
+10. [Libraries chosen and why](#10-libraries-chosen-and-why)
+11. [Defects the conformance tests caught](#11-defects-the-conformance-tests-caught)
 
 ---
 
@@ -44,7 +47,7 @@ Contract-first makes the spec the only hand-written description and derives the 
 | conformance tests | pass/fail against the spec, not against what the developer remembered |
 
 While building this repository the validator caught six real defects in code that "worked"
-([section 10](#10-defects-the-conformance-tests-caught)).
+([section 11](#11-defects-the-conformance-tests-caught)).
 
 ## 2. The whole picture in one diagram
 
@@ -166,21 +169,28 @@ spring:
         ssl:
           bundle: orders                       # mTLS / custom trust, see spring.ssl.bundle.*
 orders:
-  client:                                      # added by this library
+  client:                                      # added by the Orders client, blocks shared by every contract client
     enabled: true
     auth:
       mode: static                             # static | propagate | provider
       token: ${ORDERS_API_KEY}
       header-name: X-API-Key                   # the contract's ApiKeyAuth header
       scheme:                                  # e.g. Bearer → "Authorization: Bearer <token>"
+    retry:
+      enabled: true                            # idempotent calls only (GET/PUT/DELETE, POST with Idempotency-Key)
+      max-attempts: 3                          # on IOException and 502/503/504, exponential backoff 200ms ×2 up to 2s
+    request-id:
+      enabled: true                            # copy the MDC "requestId" onto X-Request-Id unless set explicitly
 ```
 
 | Concern | Where it is configured | Who implements it |
 |---------|------------------------|-------------------|
 | Base URL, timeouts, redirects, default headers, TLS, API versioning | `spring.http.serviceclient.orders.*` | Spring Boot's HTTP service client auto-configuration |
-| Authentication token: fixed, forwarded from the caller, or fetched on the fly | `orders.client.auth.*` + optional `OrdersTokenProvider` bean | this library's `TokenHeaderInterceptor` |
-| JSON policy (omit unset fields, `JsonNullable` for nullable properties) | fixed in the library | this library |
-| Error mapping to `OrdersApiException` / `ProblemDetail` | fixed in the library | this library |
+| Authentication token: fixed, forwarded from the caller, or fetched on the fly | `orders.client.auth.*` + optional `OrdersTokenProvider` bean | `TokenHeaderInterceptor` (client-support) |
+| Retries for idempotent calls on transient failures | `orders.client.retry.*` | `RetryingRequestInterceptor` (client-support) |
+| Correlation-id propagation from the MDC | `orders.client.request-id.*` | `RequestIdPropagationInterceptor` (client-support) |
+| JSON policy (omit unset fields, `JsonNullable` for nullable properties) | fixed | `ContractClientSupport.contractMapper` |
+| Error mapping to `OrdersApiException` (an `ApiException`) with `ProblemDetail` and typed field errors | fixed | `ProblemResponseErrorHandler` (client-support) |
 | Anything else (logging, tracing, retries) | your own `RestClientCustomizer` or `RestClientHttpServiceGroupConfigurer` beans | Spring |
 
 Authentication modes, resolved per request:
@@ -191,8 +201,8 @@ Authentication modes, resolved per request:
 | `propagate` | `TokenContext.with(token, () -> …)` first, otherwise the same header of the servlet request being handled (scheme stripped, never doubled) | gateways, acting on behalf of the caller |
 | `provider` | your `OrdersTokenProvider` bean, every call; wrap in `CachingTokenProvider` for a TTL and `invalidate()` on 401 | OAuth2 client credentials, secret managers, JWT relay |
 
-If no token can be resolved the call fails before anything is sent, with `OrdersClientAuthenticationException`
-naming the mode and the fix. **[docs/authentication.md](docs/authentication.md)** has twelve complete examples
+If no token can be resolved, or the provider throws, the call fails before anything is sent with
+`ClientAuthenticationException` naming the mode and the fix. **[docs/authentication.md](docs/authentication.md)** has twelve complete examples
 (API key, bearer, request propagation, Kafka listener, structured concurrency, OAuth2, JWT relay, secret manager
 with caching, 401-then-retry, key rotation, two identities, mTLS, tests).
 
@@ -253,9 +263,14 @@ What the compiler cannot guarantee, the tests do ([section 6](#6-how-we-know-bot
 ### 5.4 Errors
 
 `ApiExceptionHandler` extends Spring's `ResponseEntityExceptionHandler`, so every framework exception keeps its
-standard status, and every response (including the 401 from `ApiKeyAuthenticationFilter`) is a `ProblemDetail`
-decorated with the API's `type` namespace, an absolute `instance`, and for validation failures the contract's
-`errors` extension. Domain failures are mapped with an exhaustive pattern-matching `switch` over the sealed hierarchy.
+standard status, and every response is a `ProblemDetail` decorated with the API's `type` namespace, an absolute
+`instance`, and for validation failures the contract's `errors` extension. Domain failures are mapped with an
+exhaustive pattern-matching `switch` over the sealed hierarchy.
+
+The contract's `ApiKeyAuth` scheme is enforced by Spring Security (`SecurityConfig`): a stateless filter chain on
+the API base path, an `AuthenticationFilter` that converts `X-API-Key` into an `ApiKeyAuthentication` verified in
+constant time by `ApiKeyAuthenticationManager`, and a `ProblemAuthenticationEntryPoint` that renders 401 as the same
+`ProblemDetail` shape. No CSRF, no sessions, no Basic challenge, no generated default user.
 
 ## 6. How we know both sides follow the spec
 
@@ -263,7 +278,8 @@ Five independent checks, each catching a class of drift the previous one cannot:
 
 | # | Check | Where | Catches |
 |---|-------|-------|---------|
-| 1 | **Spec lint**: parses the YAML, requires an operationId and a 401 on every operation, requires every error to be a `problem+json` `Problem` | `orders-api-spec` tests | a broken contract before any code is generated |
+| 1 | **Spec lint**: parses the YAML, requires an operationId and a 401 on every operation, requires every error to be a `problem+json` `Problem`, requires `info.version` to match the artifact version | `orders-api-spec` tests | a broken or mis-versioned contract before any code is generated |
+| 1b | **Compatibility gate**: `openapi-diff` against the base branch on every pull request | CI job `contract-compatibility` | an incompatible contract change without a major version bump |
 | 2 | **Compiler**: controllers implement generated interfaces | `orders-api-server` | missing or mistyped operations |
 | 3 | **Route coverage**: diffs the YAML's operations against Spring MVC's actual handler mappings, and against the `@HttpExchange` methods on the generated client interfaces | `ContractCoverageTest`, `ClientContractCoverageTest` | an operation that compiles but is not routed or not exposed |
 | 4 | **MockMvc conformance**: every operation, every happy path and every error path is exercised; each exchange is validated against the YAML by Atlassian's `openapi-request-validator` (status, headers, media type, body schema). A final test fails if **any documented response of any operation** was never produced | `*ConformanceTest`, `DocumentedResponsesCoverageTest` | wrong status codes, missing headers, schema violations, undeclared responses, and untested responses |
@@ -283,38 +299,74 @@ the wrong header, problems left undecoded). Every one failed the build.
 
 ```mermaid
 flowchart TB
-    SPEC[orders-api-spec<br/>the YAML as a jar]
-    TS[orders-api-test-support<br/>validator adapters]
-    CLIENT[orders-api-client<br/>generated client + auto-config]
-    SERVER[orders-api-server<br/>generated interfaces + controllers]
-    E2E[orders-api-e2e<br/>integration tests only]
+    subgraph generic["Generic, reusable for any contract"]
+        CS[contract-first-client-support<br/>token modes, retries, request id,<br/>JSON policy, ProblemDetail errors]
+        TS[contract-first-test-support<br/>spec validator for MockMvc and RestClient,<br/>operation listing, response coverage]
+    end
+    subgraph orders["The Orders API (the worked example)"]
+        SPEC[orders-api-spec<br/>the YAML as a jar + constants]
+        CLIENT[orders-api-client<br/>generated client + 40-line auto-config]
+        SERVER[orders-api-server<br/>generated interfaces + controllers]
+        E2E[orders-api-e2e<br/>integration tests only]
+    end
 
-    TS --> SPEC
-    CLIENT -. test .-> TS
-    SERVER -. test .-> TS
-    E2E -. test .-> CLIENT & SERVER & TS
-
+    CLIENT --> CS
+    CLIENT -. test .-> TS & SPEC
+    SERVER -. test .-> TS & SPEC
+    E2E -. test .-> CLIENT & SERVER & TS & SPEC
     CLIENT -. generator reads the file .-> SPEC
     SERVER -. generator reads the file .-> SPEC
 ```
 
 | Module | Produces | Depends on (compile) | Depends on (test) | Why it is shaped this way |
 |--------|----------|----------------------|-------------------|---------------------------|
-| **orders-api-spec** | a jar containing `openapi/orders-api.yaml` | nothing | swagger-parser | The contract must be loadable from the classpath wherever it is validated. Packaging it as a jar gives it a version and lets tests in other modules say "the contract" without a file path. The generator itself reads the YAML from the file system via the `orders.spec.file` property, so the spec module does not have to be built first for generation, only for tests. |
-| **orders-api-test-support** | `OrdersContract`, `MockMvcContract`, `ContractValidatingInterceptor`, `ContractOperation`, `ContractCoverage` | spec, validator core, spring-web, spring-test | | Both the server tests and the e2e tests need the same validator plumbing. Putting it in one module keeps a single implementation and keeps validator dependencies out of production code. It is **test-scope only** for every consumer. |
-| **orders-api-client** | generated models + `@HttpExchange` interfaces, `OrdersClientAutoConfiguration`, token strategies | `spring-boot-starter-restclient`, `spring-boot-starter-jackson`, `jackson-databind-nullable`, `jakarta.validation-api` | test-support, `spring-boot-starter-restclient-test` | **This is the only module a consumer depends on.** It has no dependency on the server or the spec jar, so a consuming application pulls in nothing but the client and its Boot starters. |
-| **orders-api-server** | generated server interfaces + models, the application | `spring-boot-starter-webmvc`, `spring-boot-starter-validation`, `jackson-databind-nullable` | test-support, `spring-boot-starter-webmvc-test` | The server **does not depend on the client**: they are separate deployables and may evolve on different schedules. Its plain jar is the main artifact so `orders-api-e2e` can depend on the classes; the runnable fat jar is attached as `-exec`. |
-| **orders-api-e2e** | nothing deployable | | client, server, test-support, `spring-boot-starter-web-server-test` | The only place where client and server meet. Kept separate so neither production module ever sees the other, and so the slow socket-opening tests run under Failsafe, not Surefire. |
+| **contract-first-client-support** | `ContractClientSupport`, `TokenProvider` + static/propagating/caching providers, `TokenContext`, `TokenHeaderInterceptor`, `RetryingRequestInterceptor`, `RequestIdPropagationInterceptor`, `ProblemResponseErrorHandler`, `ApiException`, `AuthProperties`/`RetryProperties`/`RequestIdProperties` | `spring-boot-starter-restclient`, `spring-boot-starter-jackson`, `jackson-databind-nullable` | restclient-test | Knows no API. Every contract client in an organisation composes it; fixes land once. Published as a normal library. |
+| **contract-first-test-support** | `Contract`, `MockMvcContract`, `ContractValidatingInterceptor`, `ContractOperation`, `ContractCoverage` | validator core, swagger-parser, spring-web, spring-test, assertj | | Knows no API: a `Contract` is built from any classpath resource and base path. **Test-scope only** for every consumer; keeps validator dependencies out of production code. |
+| **orders-api-spec** | a jar with `openapi/orders-api.yaml`, `OrdersContract` constants, filtered `contract.properties` | nothing | swagger-parser | The contract must be loadable from the classpath wherever it is validated, and its version must be readable: `OrdersApiSpecTest` fails if `info.version` and the Maven version disagree. The generator reads the YAML from the file system (`orders.spec.file`), so this jar is needed for tests, not for generation. |
+| **orders-api-client** | generated models + `@HttpExchange` interfaces, `OrdersClientProperties`, `OrdersClientAutoConfiguration`, `OrdersTokenProvider`, `OrdersApiException` | client-support, `jakarta.validation-api` | test-support, spec, restclient-test | **The only module a consumer depends on.** No dependency on the server or the spec jar. `OrdersTokenProvider` is a marker subtype so several APIs' provider beans never clash. |
+| **orders-api-server** | generated server interfaces + models, controllers, domain, Spring Security | `spring-boot-starter-webmvc`, `-validation`, `-security`, `jackson-databind-nullable` | test-support, spec, webmvc-test, security-test | The server **does not depend on the client**: separate deployables, separate release schedules. Plain jar is the main artifact so `orders-api-e2e` can use the classes; the runnable fat jar is attached as `-exec`. |
+| **orders-api-e2e** | nothing deployable | | client, server, spec, test-support, `spring-boot-starter-web-server-test` | The only place client and server meet. Kept separate so neither production module ever sees the other, and so socket-opening tests run under Failsafe, not Surefire. |
 
-Reactor build order follows from this: spec → test-support → client → server → e2e. Client and server generate
-their own copies of the models on purpose (different packages); the e2e module has both on one classpath and the
-two sets must not collide.
+Reactor build order follows from this: client-support → test-support → spec → client → server → e2e. Client and
+server generate their own copies of the models on purpose (different packages); the e2e module has both on one
+classpath and the two sets must not collide.
 
-**If you only consume the API**: depend on `orders-api-client`. **If you implement it**: depend on nothing here;
-copy the server module's generator execution into your service and implement the interfaces. **If you want the
-conformance tests in your own service**: add `orders-api-test-support` at test scope.
+## 8. Reusing this for your own API
 
-## 8. Build, run, adapt
+The Orders modules are the worked example; the two `contract-first-*` libraries are what you take with you.
+
+**Consume an API that someone published this way**: depend on its client jar (here `orders-api-client`), set
+`spring.http.serviceclient.<group>.base-url` and `<prefix>.auth.token`, inject the generated interface.
+
+**Publish a client for your own contract** (one module, roughly what `orders-api-client` contains):
+
+1. Copy the generator execution from `orders-api-client/pom.xml`, point it at your YAML, choose your packages, and
+   depend on `contract-first-client-support`.
+2. Write a properties record with the shared blocks:
+   ```java
+   @ConfigurationProperties("billing.client")
+   public record BillingClientProperties(@DefaultValue("true") boolean enabled,
+           @DefaultValue AuthProperties auth, @DefaultValue RetryProperties retry, @DefaultValue RequestIdProperties requestId) {}
+   ```
+3. Write a marker `BillingTokenProvider extends TokenProvider` and `BillingApiException extends ApiException`.
+4. Write the auto-configuration: `@ImportHttpServices(group = "billing", basePackageClasses = ...)`, one bean for the
+   default token provider via `ContractClientSupport.tokenProvider(...)`, one bean returning
+   `ContractClientSupport.forGroup("billing")....groupConfigurer()`, and list it in `AutoConfiguration.imports`.
+   `OrdersClientAutoConfiguration` is the template; it is 40 lines.
+
+**Implement your own contract**: copy the server module's generator execution (`interfaceOnly`), implement the
+interfaces, keep `ApiExceptionHandler`/`ProblemFactory` and the security package if the scheme matches.
+
+**Prove conformance in your own tests**: add `contract-first-test-support` at test scope, create
+`Contract.fromClasspath("openapi/billing.yaml", "/billing/v1")` once, call `contract.mockMvc().assertExchangeConforms(result)`
+in MockMvc tests and `builder.requestInterceptor(contract.validatingInterceptor())` in end-to-end tests, and copy the
+three coverage tests (`ContractCoverageTest`, `ClientContractCoverageTest`, `DocumentedResponsesCoverageTest`),
+which are API-agnostic apart from the two constants they read.
+
+**Guard the contract itself**: the `contract-compatibility` job in `.github/workflows/ci.yml` runs `openapi-diff`
+against the base branch on every pull request and fails on incompatible changes unless the major version was bumped.
+
+## 9. Build, run, adapt
 
 ```bash
 mvn verify                   # everything: generate, compile, Surefire tests, Failsafe e2e
@@ -322,7 +374,7 @@ mvn test                     # without the e2e suite
 mvn generate-sources         # only regenerate; inspect */target/generated-sources/openapi
 mvn -pl orders-api-client -am install     # publish the client jar to your local repository
 
-java -jar orders-api-server/target/orders-api-server-0.1.0-SNAPSHOT-exec.jar
+java -jar orders-api-server/target/orders-api-server-1.0.0-SNAPSHOT-exec.jar
 curl -s -H 'X-API-Key: dev-api-key-1' localhost:8080/api/v1/catalog/products/WIDGET-BLUE-L
 curl -s localhost:8080/api/v1/orders            # 401 as application/problem+json
 ```
@@ -333,13 +385,16 @@ server interfaces (the compiler lists what is missing, `ContractCoverageTest` li
 test layers. Generated sources are never committed, so the YAML is the only artefact to review in a pull request.
 
 Requirements: Java 25 and Maven 3.9 or later, enforced by the Enforcer plugin. The first build downloads Spring Boot
-4.1.1 and OpenAPI Generator 7.26.0 (about 40 MB).
+4.1.1 and OpenAPI Generator 7.26.0 (about 40 MB). JaCoCo reports land in `*/target/site/jacoco`; Dependabot and
+CodeQL are configured under `.github/`.
 
-## 9. Libraries chosen and why
+## 10. Libraries chosen and why
 
 | Need | Choice | Why |
 |------|--------|-----|
-| Generate from OpenAPI | **OpenAPI Generator 7.26.0**, `spring` generator, stock templates | Native `useSpringBoot4`/`useJackson3`; `spring-http-interface` library for `@HttpExchange` clients; `interfaceOnly` for servers. No fork, no custom templates. |
+| Generate from OpenAPI | **OpenAPI Generator 7.26.0**, `spring` generator, stock templates | Native `useSpringBoot4`/`useJackson3`/`useJspecify`; `spring-http-interface` library for `@HttpExchange` clients; `interfaceOnly` for servers. No fork, no custom templates. |
+| Server authentication | **Spring Security 7.1** | Stateless API-key chain with a `ProblemDetail` entry point; defining an `AuthenticationManager` makes Boot's default user back off. |
+| Contract compatibility | **openapi-diff 2.1.7** | Runs in CI on pull requests; incompatible changes need a major version bump. |
 | Declarative client runtime | **Spring Framework 7 HTTP service clients** + **Spring Boot 4.1** `@ImportHttpServices` groups | Base URL, timeouts, redirects, TLS, default headers and API versioning are Boot properties. Spring Cloud OpenFeign is in maintenance mode and adds nothing here. |
 | Validate exchanges against the spec | **Atlassian `openapi-request-validator` 3.0.0** (formerly `swagger-request-validator`), core module | Framework-agnostic. Its Spring interceptor validates percent-encoded query values and rejects valid `date-time` parameters, hence the small adapter in test-support. |
 | Nullable properties | **`jackson-databind-nullable` 0.2.12** | Ships `JsonNullableJackson3Module`, so `OrderPatch.notes` distinguishes absent, null and value. |
@@ -348,7 +403,7 @@ Requirements: Java 25 and Maven 3.9 or later, enforced by the Enforcer plugin. T
 Not used: Spring Cloud Contract (its own DSL), springdoc-openapi (code-first, the opposite direction; works with Boot 4
 if you also want to serve `/v3/api-docs`), hand-written client wrappers (duplicate the contract).
 
-## 10. Defects the conformance tests caught
+## 11. Defects the conformance tests caught
 
 All fixed; listed because they are exactly what this setup exists to find.
 

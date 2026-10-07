@@ -87,6 +87,20 @@ class OrdersApiSpecTest {
     }
 
     @Test
+    @DisplayName("the artifact version matches the contract's info.version")
+    void artifactVersionMatchesContractVersion() throws java.io.IOException {
+        java.util.Properties props = new java.util.Properties();
+        try (var in = getClass().getClassLoader().getResourceAsStream("contract.properties")) {
+            assertThat(in).as("filtered contract.properties").isNotNull();
+            props.load(in);
+        }
+        String artifactVersion = props.getProperty("contract.artifact.version").replace("-SNAPSHOT", "");
+        assertThat(openApi.getInfo().getVersion())
+                .as("info.version must equal the Maven version (without -SNAPSHOT) so consumers can read the contract version off the jar")
+                .isEqualTo(artifactVersion);
+    }
+
+    @Test
     @DisplayName("a global API key security requirement is declared")
     void apiKeySecurityIsDeclared() {
         assertThat(openApi.getComponents().getSecuritySchemes()).containsKey("ApiKeyAuth");

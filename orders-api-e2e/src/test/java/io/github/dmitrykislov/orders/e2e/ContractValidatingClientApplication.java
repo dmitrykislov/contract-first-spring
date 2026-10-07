@@ -1,7 +1,8 @@
 package io.github.dmitrykislov.orders.e2e;
 
 import io.github.dmitrykislov.orders.client.OrdersClientProperties;
-import io.github.dmitrykislov.orders.testsupport.ContractValidatingInterceptor;
+import io.github.dmitrykislov.contractfirst.testing.Contract;
+import io.github.dmitrykislov.orders.spec.OrdersContract;
 import org.springframework.boot.SpringBootConfiguration;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -19,6 +20,7 @@ public class ContractValidatingClientApplication {
     @Bean
     RestClientHttpServiceGroupConfigurer contractValidation() {
         return groups -> groups.filterByName(OrdersClientProperties.GROUP)
-                .forEachClient((group, builder) -> builder.requestInterceptor(new ContractValidatingInterceptor()));
+                .forEachClient((group, builder) -> builder.requestInterceptor(
+                        Contract.fromClasspath(OrdersContract.RESOURCE, OrdersContract.BASE_PATH).validatingInterceptor()));
     }
 }

@@ -1,12 +1,11 @@
 package io.github.dmitrykislov.orders.server.web;
 
-import static io.github.dmitrykislov.orders.testsupport.MockMvcContract.assertResponseConforms;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.dmitrykislov.orders.server.model.Problem;
 import io.github.dmitrykislov.orders.server.support.ApiTestBase;
-import io.github.dmitrykislov.orders.testsupport.ContractOperation;
-import io.github.dmitrykislov.orders.testsupport.OrdersContract;
+import io.github.dmitrykislov.contractfirst.testing.ContractOperation;
+import io.github.dmitrykislov.orders.spec.OrdersContract;
 import java.util.stream.Stream;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -44,7 +43,7 @@ class SecurityConformanceTest extends ApiTestBase {
     }
 
     static Stream<ContractOperation> allOperations() {
-        return ContractOperation.all().stream();
+        return CONTRACT.operations().stream();
     }
 
     @Test
@@ -54,6 +53,15 @@ class SecurityConformanceTest extends ApiTestBase {
         assertResponseConforms(result);
         assertThat(result).hasStatus(HttpStatus.UNAUTHORIZED);
         assertThat(fromJson(result, Problem.class).getDetail()).doesNotContain("nope");
+    }
+
+    @Test
+    void noBasicAuthChallengeOrSessionIsOffered() {
+        MvcTestResult result = mvc.get().uri(url("/orders")).exchange();
+
+        assertThat(result).hasStatus(HttpStatus.UNAUTHORIZED);
+        assertThat(result.getResponse().getHeader("WWW-Authenticate")).isNull();
+        assertThat(result.getResponse().getHeader("Set-Cookie")).isNull();
     }
 
     @Test

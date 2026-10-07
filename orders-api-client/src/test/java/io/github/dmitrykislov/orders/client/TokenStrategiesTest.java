@@ -9,9 +9,8 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import io.github.dmitrykislov.orders.client.api.CatalogApi;
-import io.github.dmitrykislov.orders.client.auth.OrdersClientAuthenticationException;
-import io.github.dmitrykislov.orders.client.auth.OrdersTokenProvider;
-import io.github.dmitrykislov.orders.client.auth.TokenContext;
+import io.github.dmitrykislov.contractfirst.client.auth.ClientAuthenticationException;
+import io.github.dmitrykislov.contractfirst.client.auth.TokenContext;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.AfterEach;
@@ -128,7 +127,7 @@ class TokenStrategiesTest {
         void failsBeforeSendingWhenNoCallerTokenIsAvailable() {
             runner.withPropertyValues("orders.client.auth.mode=propagate").run(context -> {
                 assertThatThrownBy(() -> catalog(context).getProduct("WIDGET-BLUE-L", "en"))
-                        .isInstanceOf(OrdersClientAuthenticationException.class)
+                        .isInstanceOf(ClientAuthenticationException.class)
                         .hasMessageContaining("PROPAGATE")
                         .hasMessageContaining("TokenContext");
                 server(context).verify(); // nothing was expected, nothing must have been sent
@@ -177,7 +176,7 @@ class TokenStrategiesTest {
             runner.withPropertyValues("orders.client.auth.mode=provider")
                     .withBean("emptyProvider", OrdersTokenProvider.class, () -> Optional::empty)
                     .run(context -> assertThatThrownBy(() -> catalog(context).getProduct("WIDGET-BLUE-L", "en"))
-                            .isInstanceOf(OrdersClientAuthenticationException.class)
+                            .isInstanceOf(ClientAuthenticationException.class)
                             .hasMessageContaining("empty token"));
         }
     }

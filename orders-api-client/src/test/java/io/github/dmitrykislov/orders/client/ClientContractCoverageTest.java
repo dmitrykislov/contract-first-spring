@@ -3,7 +3,8 @@ package io.github.dmitrykislov.orders.client;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.dmitrykislov.orders.client.api.OrdersApi;
-import io.github.dmitrykislov.orders.testsupport.ContractOperation;
+import io.github.dmitrykislov.contractfirst.testing.Contract;
+import io.github.dmitrykislov.orders.spec.OrdersContract;
 import java.lang.reflect.Method;
 import java.util.Map;
 import java.util.Set;
@@ -41,7 +42,8 @@ class ClientContractCoverageTest {
         }
 
         Map<String, String> expected = new TreeMap<>();
-        ContractOperation.all().forEach(op -> expected.put(op.method() + " " + op.path(), op.operationId()));
+        Contract.fromClasspath(OrdersContract.RESOURCE, OrdersContract.BASE_PATH).operations()
+                .forEach(op -> expected.put(op.method() + " " + op.path(), op.operationId()));
 
         assertThat(actual).containsExactlyInAnyOrderEntriesOf(expected);
     }

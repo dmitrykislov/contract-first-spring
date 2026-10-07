@@ -222,8 +222,8 @@ class OrdersClientAutoConfigurationTest {
         assertThatThrownBy(() -> ordersApi.createOrder("idem-12345678", sampleCreateRequest(), null))
                 .isInstanceOfSatisfying(OrdersApiException.class, ex -> {
                     assertThat(ex.fieldErrors()).singleElement().satisfies(error -> {
-                        assertThat(error.getField()).isEqualTo("lines[0].quantity");
-                        assertThat(error.getRejectedValue()).isEqualTo("0");
+                        assertThat(error.field()).isEqualTo("lines[0].quantity");
+                        assertThat(error.rejectedValue()).isEqualTo("0");
                     });
                     // the extension is also reachable generically through ProblemDetail
                     assertThat(ex.problem()).get().extracting(p -> p.getProperties().get("errors")).isNotNull();
@@ -234,11 +234,11 @@ class OrdersClientAutoConfigurationTest {
     void nonProblemErrorsStillRaiseTypedExceptionWithRawBody() {
         UUID id = UUID.randomUUID();
         server.expect(once(), requestTo(BASE + "/orders/" + id))
-                .andRespond(withStatus(HttpStatus.BAD_GATEWAY).contentType(MediaType.TEXT_HTML).body("<html>upstream down</html>"));
+                .andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR).contentType(MediaType.TEXT_HTML).body("<html>upstream down</html>"));
 
         assertThatThrownBy(() -> ordersApi.getOrder(id, null))
                 .isInstanceOfSatisfying(OrdersApiException.class, ex -> {
-                    assertThat(ex.status()).isEqualTo(HttpStatus.BAD_GATEWAY);
+                    assertThat(ex.status()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
                     assertThat(ex.problem()).isEmpty();
                 })
                 .hasMessageContaining("upstream down");
@@ -249,13 +249,13 @@ class OrdersClientAutoConfigurationTest {
         UUID id = UUID.randomUUID();
         String hugeHtml = "<html>" + "x".repeat(5_000) + "</html>";
         server.expect(once(), requestTo(BASE + "/orders/" + id))
-                .andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE).contentType(MediaType.TEXT_HTML).body(hugeHtml));
+                .andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR).contentType(MediaType.TEXT_HTML).body(hugeHtml));
 
         assertThatThrownBy(() -> ordersApi.getOrder(id, null))
                 .isInstanceOf(OrdersApiException.class)
                 .hasMessageContaining("... (" + hugeHtml.length() + " chars)")
                 .extracting(Throwable::getMessage).asString()
-                .hasSizeLessThan(OrdersApiException.RAW_BODY_EXCERPT_LENGTH + 100);
+                .hasSizeLessThan(io.github.dmitrykislov.contractfirst.client.ApiException.RAW_BODY_EXCERPT_LENGTH + 100);
     }
 
     @Test
@@ -278,6 +278,39 @@ class OrdersClientAutoConfigurationTest {
     }
 
     @Test
+    void retriesTransientFailuresOfIdempotentCallsThroughTheAutoConfiguredClient() {
+        UUID id = UUID.randomUUID();
+        server.expect(once(), requestTo(BASE + "/orders/" + id)).andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE));
+        server.expect(once(), requestTo(BASE + "/orders/" + id)).andRespond(withStatus(HttpStatus.BAD_GATEWAY));
+        server.expect(once(), requestTo(BASE + "/orders/" + id))
+                .andExpect(header("X-API-Key", "secret-key"))
+                .andRespond(withSuccess(json.writeValueAsString(sampleOrder(id)), MediaType.APPLICATION_JSON));
+
+        ResponseEntity<Order> response = ordersApi.getOrder(id, null);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    }
+
+    @Test
+    void propagatesTheMdcRequestIdUnlessTheCallerSetsOne() {
+        UUID id = UUID.randomUUID();
+        UUID fromMdc = UUID.randomUUID();
+        UUID explicit = UUID.randomUUID();
+        org.slf4j.MDC.put("requestId", fromMdc.toString());
+        try {
+            server.expect(once(), requestTo(BASE + "/orders/" + id)).andExpect(header("X-Request-Id", fromMdc.toString()))
+                    .andRespond(withSuccess(json.writeValueAsString(sampleOrder(id)), MediaType.APPLICATION_JSON));
+            server.expect(once(), requestTo(BASE + "/orders/" + id)).andExpect(header("X-Request-Id", explicit.toString()))
+                    .andRespond(withSuccess(json.writeValueAsString(sampleOrder(id)), MediaType.APPLICATION_JSON));
+
+            ordersApi.getOrder(id, null);
+            ordersApi.getOrder(id, explicit);
+        } finally {
+            org.slf4j.MDC.clear();
+        }
+    }
+
+    @Test
     void clientCanBeSwitchedOffAndStaticModeRequiresAToken() {
         ApplicationContextRunner runner = new ApplicationContextRunner()
                 .withUserConfiguration(MockedConsumerApp.class)
@@ -290,7 +323,7 @@ class OrdersClientAutoConfigurationTest {
                 .run(context -> assertThat(context).hasSingleBean(OrdersApi.class).hasSingleBean(CatalogApi.class));
 
         runner.run(context -> assertThat(context).hasFailed()
-                .getFailure().rootCause().hasMessageContaining("orders.client.auth.token"));
+                .getFailure().rootCause().hasMessageContaining("auth.token"));
     }
 
     private static Order sampleOrder(UUID id) {

@@ -1,9 +1,9 @@
 package io.github.dmitrykislov.orders.server.support;
 
-import static io.github.dmitrykislov.orders.testsupport.OrdersContract.BASE_PATH;
 
 import io.github.dmitrykislov.orders.server.model.Order;
-import io.github.dmitrykislov.orders.testsupport.MockMvcContract;
+import io.github.dmitrykislov.contractfirst.testing.Contract;
+import io.github.dmitrykislov.orders.spec.OrdersContract;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -22,6 +22,17 @@ import tools.jackson.databind.json.JsonMapper;
 @AutoConfigureMockMvc
 public abstract class ApiTestBase {
 
+    /** One shared contract instance per JVM: one validator, one coverage record across all test classes. */
+    protected static final Contract CONTRACT = Contract.fromClasspath(OrdersContract.RESOURCE, OrdersContract.BASE_PATH);
+
+    protected static void assertExchangeConforms(MvcTestResult result) {
+        CONTRACT.mockMvc().assertExchangeConforms(result);
+    }
+
+    protected static void assertResponseConforms(MvcTestResult result) {
+        CONTRACT.mockMvc().assertResponseConforms(result);
+    }
+
     @Autowired
     protected MockMvcTester mvc;
 
@@ -29,7 +40,7 @@ public abstract class ApiTestBase {
     protected JsonMapper json;
 
     protected String url(String path) {
-        return BASE_PATH + path;
+        return OrdersContract.BASE_PATH + path;
     }
 
     protected String toJson(Object value) {
@@ -54,7 +65,7 @@ public abstract class ApiTestBase {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(toJson(Fixtures.createOrderRequest()))
                 .exchange();
-        MockMvcContract.assertExchangeConforms(result);
+        assertExchangeConforms(result);
         return fromJson(result, Order.class);
     }
 

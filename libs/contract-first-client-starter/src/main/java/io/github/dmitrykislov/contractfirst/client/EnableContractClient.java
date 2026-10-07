@@ -1,5 +1,8 @@
 package io.github.dmitrykislov.contractfirst.client;
 
+import io.github.dmitrykislov.contractfirst.client.autoconfigure.ContractClientBeanRegistrar;
+import io.github.dmitrykislov.contractfirst.client.autoconfigure.HttpServiceGroupRegistrar;
+import io.github.dmitrykislov.contractfirst.client.errors.ApiException;
 import io.github.dmitrykislov.contractfirst.client.auth.TokenProvider;
 import java.lang.annotation.Documented;
 import java.lang.annotation.ElementType;
@@ -28,22 +31,22 @@ import org.springframework.context.annotation.Import;
  * <p>What it wires, for the group:
  * <ul>
  *   <li>the interfaces as HTTP service proxies (Spring Boot binds {@code spring.http.serviceclient.<group>.*});</li>
- *   <li>settings from {@code contract-first.clients.<group>.*} over {@code contract-first.clients.defaults.*};</li>
+ *   <li>settings from {@code openapi.clients.groups.<group>.*} over {@code openapi.clients.defaults.*};</li>
  *   <li>token resolution: a bean of {@link #tokenProvider()} type if given, else a bean named
  *       {@code <group>TokenProvider}, else the built-in provider for the configured mode;</li>
  *   <li>retries, request-id propagation, contract-safe JSON and {@link ApiException} mapping.</li>
  * </ul>
- * {@code contract-first.clients.<group>.enabled=false} switches the whole registration off.
+ * {@code openapi.clients.groups.<group>.enabled=false} switches the whole registration off.
  */
 @Target(ElementType.TYPE)
 @Retention(RetentionPolicy.RUNTIME)
 @Documented
 @Configuration(proxyBeanMethods = false)
 @AutoConfigureBefore(HttpServiceClientAutoConfiguration.class)
-@Import({ContractClientRegistrar.class, ContractClientBeansRegistrar.class})
+@Import({HttpServiceGroupRegistrar.class, ContractClientBeanRegistrar.class})
 public @interface EnableContractClient {
 
-    /** HTTP service group name; also the key under {@code spring.http.serviceclient} and {@code contract-first.clients}. */
+    /** HTTP service group name; also the key under {@code spring.http.serviceclient} and {@code openapi.clients}. */
     String group();
 
     /** Packages to scan for {@code @HttpExchange} interfaces, named by a class they contain. */

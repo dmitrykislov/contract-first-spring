@@ -3,8 +3,8 @@ package io.github.dmitrykislov.contractfirst.server.security;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import io.github.dmitrykislov.contractfirst.server.ContractJson;
-import io.github.dmitrykislov.contractfirst.server.ProblemFactory;
+import io.github.dmitrykislov.contractfirst.server.json.ContractJsonMapper;
+import io.github.dmitrykislov.contractfirst.server.problem.ProblemFactory;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
@@ -54,7 +54,7 @@ class ApiKeyAuthenticationManagerTest {
     void entryPointWritesAProblemWithTheRightDetail() throws Exception {
         JsonMapper mapper = JsonMapper.builder().addMixIn(ProblemDetail.class, ProblemDetailJacksonMixin.class).build();
         ProblemAuthenticationEntryPoint entryPoint = new ProblemAuthenticationEntryPoint(
-                new ContractJson(mapper), new ProblemFactory("urn:problem-type:"), "X-API-Key");
+                new ContractJsonMapper(mapper), new ProblemFactory("urn:problem-type:"), "X-API-Key");
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/orders");
 
         MockHttpServletResponse missing = new MockHttpServletResponse();

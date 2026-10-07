@@ -1,5 +1,6 @@
 package io.github.dmitrykislov.examples.orders.client;
 
+import io.github.dmitrykislov.contractfirst.client.EnableContractClient;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.ExpectedCount.once;
@@ -53,7 +54,7 @@ import tools.jackson.databind.json.JsonMapper;
         "spring.http.serviceclient.orders.base-url=http://orders.test/api/v1",
         "spring.http.serviceclient.orders.connect-timeout=1500ms",
         "spring.http.serviceclient.orders.read-timeout=2500ms",
-        "contract-first.clients.orders.auth.token=secret-key"
+        "openapi.clients.groups.orders.auth.token=secret-key"
 })
 class OrdersClientTest {
 
@@ -256,7 +257,7 @@ class OrdersClientTest {
                 .isInstanceOf(OrdersApiException.class)
                 .hasMessageContaining("... (" + hugeHtml.length() + " chars)")
                 .extracting(Throwable::getMessage).asString()
-                .hasSizeLessThan(io.github.dmitrykislov.contractfirst.client.ApiException.RAW_BODY_EXCERPT_LENGTH + 100);
+                .hasSizeLessThan(io.github.dmitrykislov.contractfirst.client.errors.ApiException.RAW_BODY_EXCERPT_LENGTH + 100);
     }
 
     @Test
@@ -317,10 +318,10 @@ class OrdersClientTest {
                 .withUserConfiguration(MockedConsumerApp.class)
                 .withPropertyValues("spring.http.serviceclient.orders.base-url=http://orders.test");
 
-        runner.withPropertyValues("contract-first.clients.orders.auth.token=k", "contract-first.clients.orders.enabled=false")
+        runner.withPropertyValues("openapi.clients.groups.orders.auth.token=k", "openapi.clients.groups.orders.enabled=false")
                 .run(context -> assertThat(context).doesNotHaveBean(OrdersApi.class));
 
-        runner.withPropertyValues("contract-first.clients.orders.auth.token=k")
+        runner.withPropertyValues("openapi.clients.groups.orders.auth.token=k")
                 .run(context -> assertThat(context).hasSingleBean(OrdersApi.class).hasSingleBean(CatalogApi.class));
 
         runner.run(context -> assertThat(context).hasFailed()
@@ -332,16 +333,16 @@ class OrdersClientTest {
         ApplicationContextRunner runner = new ApplicationContextRunner()
                 .withUserConfiguration(MockedConsumerApp.class)
                 .withPropertyValues("spring.http.serviceclient.orders.base-url=http://orders.test",
-                        "contract-first.clients.defaults.auth.token=shared-key",
-                        "contract-first.clients.defaults.retry.max-attempts=7");
+                        "openapi.clients.defaults.auth.token=shared-key",
+                        "openapi.clients.defaults.retry.max-attempts=7");
 
         runner.run(context -> assertThat(context).hasSingleBean(OrdersApi.class));
 
-        runner.withPropertyValues("contract-first.clients.ordres.auth.token=typo")
+        runner.withPropertyValues("openapi.clients.groups.ordres.auth.token=typo")
                 .run(context -> assertThat(context).hasFailed().getFailure()
                         .hasStackTraceContaining("ordres").hasStackTraceContaining("registered: [orders]"));
 
-        runner.withPropertyValues("contract-first.clients.ordres.auth.token=typo", "contract-first.clients.strict=false")
+        runner.withPropertyValues("openapi.clients.groups.ordres.auth.token=typo", "openapi.clients.fail-on-unknown-group=false")
                 .run(context -> assertThat(context).hasNotFailed());
     }
 

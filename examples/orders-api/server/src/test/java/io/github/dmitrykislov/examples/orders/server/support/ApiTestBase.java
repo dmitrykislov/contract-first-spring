@@ -12,14 +12,14 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
-import io.github.dmitrykislov.contractfirst.server.ContractJson;
+import io.github.dmitrykislov.contractfirst.server.json.ContractJsonMapper;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
  * Boots the whole server (filters, advice, converters) against MockMvc. The in-memory store is shared
  * across tests in a context, so tests create their own orders rather than assuming an empty store.
  */
-@SpringBootTest(properties = "contract-first.server.api-key.keys=" + Fixtures.API_KEY)
+@SpringBootTest(properties = "openapi.server.api-key.accepted-keys=" + Fixtures.API_KEY)
 @AutoConfigureMockMvc
 public abstract class ApiTestBase {
 
@@ -41,7 +41,7 @@ public abstract class ApiTestBase {
     protected JsonMapper json;
 
     @Autowired
-    void contractJson(ContractJson contractJson) {
+    void contractJson(ContractJsonMapper contractJson) {
         this.json = contractJson.mapper();
     }
 

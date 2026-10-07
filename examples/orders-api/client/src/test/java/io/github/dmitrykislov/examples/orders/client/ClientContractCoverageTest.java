@@ -1,12 +1,12 @@
 package io.github.dmitrykislov.examples.orders.client;
 
-import io.github.dmitrykislov.contractfirst.testing.ClientContractCoverageSupport;
+import io.github.dmitrykislov.contractfirst.testing.junit.AbstractClientContractCoverageTest;
 import io.github.dmitrykislov.contractfirst.testing.Contract;
 import io.github.dmitrykislov.examples.orders.client.api.OrdersApi;
 import io.github.dmitrykislov.examples.orders.spec.OrdersContract;
 
 /** Every operation in the contract is exactly one @HttpExchange method on a generated interface. */
-class ClientContractCoverageTest extends ClientContractCoverageSupport {
+class ClientContractCoverageTest extends AbstractClientContractCoverageTest {
 
     @Override
     protected Contract contract() {

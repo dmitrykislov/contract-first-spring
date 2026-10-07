@@ -1,5 +1,6 @@
 package io.github.dmitrykislov.contractfirst.client;
 
+import io.github.dmitrykislov.contractfirst.client.errors.ApiException;
 import io.github.dmitrykislov.contractfirst.client.auth.TokenProvider;
 
 /**

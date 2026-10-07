@@ -28,7 +28,7 @@ import org.springframework.test.web.client.ResponseActions;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
-/** How the client obtains the token in each {@code contract-first.clients.orders.auth.mode}. */
+/** How the client obtains the token in each {@code openapi.clients.groups.orders.auth.mode}. */
 class TokenStrategiesTest {
 
     private static final String PRODUCT_URL = "http://orders.test/api/v1/catalog/products/WIDGET-BLUE-L";
@@ -51,9 +51,9 @@ class TokenStrategiesTest {
         @Test
         void sendsConfiguredTokenWithOptionalSchemeOnConfiguredHeader() {
             runner.withPropertyValues(
-                    "contract-first.clients.orders.auth.token=abc123",
-                    "contract-first.clients.orders.auth.header-name=Authorization",
-                    "contract-first.clients.orders.auth.scheme=Bearer")
+                    "openapi.clients.groups.orders.auth.token=abc123",
+                    "openapi.clients.groups.orders.auth.header-name=Authorization",
+                    "openapi.clients.groups.orders.auth.scheme=Bearer")
                     .run(context -> {
                         expectProduct(context, header("Authorization", "Bearer abc123"), headerDoesNotExist("X-API-Key"));
                         assertThat(catalog(context).getProduct("WIDGET-BLUE-L", "en").getBody()).isNotNull();
@@ -67,7 +67,7 @@ class TokenStrategiesTest {
 
         @Test
         void forwardsTokenBoundInTokenContext() {
-            runner.withPropertyValues("contract-first.clients.orders.auth.mode=propagate").run(context -> {
+            runner.withPropertyValues("openapi.clients.groups.orders.auth.mode=propagate").run(context -> {
                 expectProduct(context, header("X-API-Key", "caller-token"));
 
                 var product = TokenContext.with("caller-token", () -> catalog(context).getProduct("WIDGET-BLUE-L", "en"));
@@ -79,7 +79,7 @@ class TokenStrategiesTest {
 
         @Test
         void forwardsHeaderOfTheServletRequestBeingHandled() {
-            runner.withPropertyValues("contract-first.clients.orders.auth.mode=propagate").run(context -> {
+            runner.withPropertyValues("openapi.clients.groups.orders.auth.mode=propagate").run(context -> {
                 MockHttpServletRequest incoming = new MockHttpServletRequest("GET", "/my-app/checkout");
                 incoming.addHeader("X-API-Key", "forwarded-token");
                 RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(incoming));
@@ -94,9 +94,9 @@ class TokenStrategiesTest {
         @Test
         void stripsTheSchemeFromAForwardedHeaderSoItIsNotPrefixedTwice() {
             runner.withPropertyValues(
-                    "contract-first.clients.orders.auth.mode=propagate",
-                    "contract-first.clients.orders.auth.header-name=Authorization",
-                    "contract-first.clients.orders.auth.scheme=Bearer")
+                    "openapi.clients.groups.orders.auth.mode=propagate",
+                    "openapi.clients.groups.orders.auth.header-name=Authorization",
+                    "openapi.clients.groups.orders.auth.scheme=Bearer")
                     .run(context -> {
                         MockHttpServletRequest incoming = new MockHttpServletRequest();
                         incoming.addHeader("Authorization", "bearer forwarded-jwt");
@@ -111,7 +111,7 @@ class TokenStrategiesTest {
 
         @Test
         void explicitContextWinsOverServletRequest() {
-            runner.withPropertyValues("contract-first.clients.orders.auth.mode=propagate").run(context -> {
+            runner.withPropertyValues("openapi.clients.groups.orders.auth.mode=propagate").run(context -> {
                 MockHttpServletRequest incoming = new MockHttpServletRequest();
                 incoming.addHeader("X-API-Key", "forwarded-token");
                 RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(incoming));
@@ -125,7 +125,7 @@ class TokenStrategiesTest {
 
         @Test
         void failsBeforeSendingWhenNoCallerTokenIsAvailable() {
-            runner.withPropertyValues("contract-first.clients.orders.auth.mode=propagate").run(context -> {
+            runner.withPropertyValues("openapi.clients.groups.orders.auth.mode=propagate").run(context -> {
                 assertThatThrownBy(() -> catalog(context).getProduct("WIDGET-BLUE-L", "en"))
                         .isInstanceOf(ClientAuthenticationException.class)
                         .hasMessageContaining("PROPAGATE")
@@ -136,7 +136,7 @@ class TokenStrategiesTest {
 
         @Test
         void doesNotRequireAStaticToken() {
-            runner.withPropertyValues("contract-first.clients.orders.auth.mode=propagate")
+            runner.withPropertyValues("openapi.clients.groups.orders.auth.mode=propagate")
                     .run(context -> assertThat(context).hasNotFailed().hasSingleBean(CatalogApi.class));
         }
     }
@@ -146,7 +146,7 @@ class TokenStrategiesTest {
 
         @Test
         void asksTheApplicationProviderOnEveryCall() {
-            runner.withPropertyValues("contract-first.clients.orders.auth.mode=provider", "contract-first.clients.orders.auth.scheme=Bearer")
+            runner.withPropertyValues("openapi.clients.groups.orders.auth.mode=provider", "openapi.clients.groups.orders.auth.scheme=Bearer")
                     .withUserConfiguration(CountingProviderConfig.class)
                     .run(context -> {
                         CountingProviderConfig.calls.set(0);
@@ -166,14 +166,14 @@ class TokenStrategiesTest {
 
         @Test
         void refusesToStartWithoutAProviderBean() {
-            runner.withPropertyValues("contract-first.clients.orders.auth.mode=provider")
+            runner.withPropertyValues("openapi.clients.groups.orders.auth.mode=provider")
                     .run(context -> assertThat(context).hasFailed()
-                            .getFailure().rootCause().hasMessageContaining(OrdersTokenProvider.class.getName()).hasMessageContaining("contract-first.clients.orders"));
+                            .getFailure().rootCause().hasMessageContaining(OrdersTokenProvider.class.getName()).hasMessageContaining("openapi.clients.groups.orders"));
         }
 
         @Test
         void emptyTokenFromProviderIsReportedClearly() {
-            runner.withPropertyValues("contract-first.clients.orders.auth.mode=provider")
+            runner.withPropertyValues("openapi.clients.groups.orders.auth.mode=provider")
                     .withBean("emptyProvider", OrdersTokenProvider.class, () -> Optional::empty)
                     .run(context -> assertThatThrownBy(() -> catalog(context).getProduct("WIDGET-BLUE-L", "en"))
                             .isInstanceOf(ClientAuthenticationException.class)

@@ -1,7 +1,7 @@
 package io.github.dmitrykislov.examples.orders.client;
 
-import io.github.dmitrykislov.contractfirst.client.ApiException;
-import io.github.dmitrykislov.contractfirst.client.ApiFieldError;
+import io.github.dmitrykislov.contractfirst.client.errors.ApiException;
+import io.github.dmitrykislov.contractfirst.client.errors.ApiFieldError;
 import java.util.List;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpStatusCode;

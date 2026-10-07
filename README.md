@@ -198,8 +198,9 @@ sequenceDiagram
 2. **The `RestClient` underneath** is built by Spring Boot from `spring.http.serviceclient.orders.*`: base URL,
    connect and read timeouts, redirects, default headers, TLS bundle. The client jar contains none of these values.
 3. **The three interceptors** come from `contract-first-client-starter` and are configured by
-   `contract-first.clients.orders.retry.*`, `.request-id.*` and `.auth.*`, layered over
-   `contract-first.clients.defaults.*`. Retry is outermost so every attempt resolves the token again (useful after
+   `openapi.clients.groups.orders.retry.*`, `.request-id.*` and `.auth.*`, layered over
+   `openapi.clients.defaults.*`. The group key `orders` is the same one Spring Boot uses under
+   `spring.http.serviceclient`, so connection and behaviour settings of one client sit side by side. Retry is outermost so every attempt resolves the token again (useful after
    a key rotation) and keeps the correlation id.
 4. **Errors are typed.** Any 4xx/5xx becomes `OrdersApiException` carrying Spring's `ProblemDetail`
    (RFC 9457) and, for validation failures, a typed list of field errors. Non-problem bodies (a proxy's HTML page) are
@@ -213,7 +214,7 @@ typed exception and a token-provider marker, and the `AutoConfiguration.imports`
 
 ```java
 @EnableContractClient(
-        group = "orders",                          // spring.http.serviceclient.orders.* and contract-first.clients.orders.*
+        group = "orders",                          // key under spring.http.serviceclient and openapi.clients.groups
         basePackageClasses = OrdersApi.class,      // where the generator put the @HttpExchange interfaces
         exception = OrdersApiException.class,      // optional: a typed catch for this API's failures
         tokenProvider = OrdersTokenProvider.class) // optional: marker type for this API's token bean
@@ -234,10 +235,10 @@ flowchart TB
     RID --> SEC["Spring Security chain<br/>X-API-Key → ApiKeyAuthentication"]
     SEC -- "missing / unknown key" --> P401["401 ProblemDetail<br/>(ProblemAuthenticationEntryPoint)"]
     SEC -- "authenticated" --> MVC["Spring MVC<br/>routes + validates using the<br/><b>generated interface's</b> annotations"]
-    MVC -- "constraint violated" --> P400["400 ProblemDetail with field errors<br/>(ContractExceptionHandler)"]
+    MVC -- "constraint violated" --> P400["400 ProblemDetail with field errors<br/>(ProblemDetailExceptionHandler)"]
     MVC --> CTRL["OrdersController<br/><code>implements OrdersApi</code>"]
     CTRL --> DOM["OrderService<br/>domain rules, in memory here"]
-    DOM -- "OrderNotFound, IllegalOrderState, …" --> PERR["404 / 409 / 412 / 422 ProblemDetail<br/>(OrdersDomainExceptionMapper → ContractExceptionHandler)"]
+    DOM -- "OrderNotFound, IllegalOrderState, …" --> PERR["404 / 409 / 412 / 422 ProblemDetail<br/>(OrdersDomainExceptionMapper → ProblemDetailExceptionHandler)"]
     DOM --> RESP["200 / 201 / 204<br/>+ ETag, Location"]
 ```
 
@@ -250,12 +251,12 @@ flowchart TB
    forgets an operation does not compile, and a spec change that alters a signature produces a `javac` error at the
    exact method.
 3. **Security is Spring Security**, assembled from `contract-first-server-starter` building blocks that exist only
-   when `contract-first.server.api-key.keys` is set: an `AuthenticationFilter` converting the `X-API-Key` header, a
+   when `openapi.server.api-key.accepted-keys` is set: an `AuthenticationFilter` converting the `X-API-Key` header, a
    constant-time `ApiKeyAuthenticationManager`, and an entry point rendering 401 as a `ProblemDetail`. The service's
    own `SecurityConfig` reduces to one statement, `apiKey.configure(http).build()`, and stays in charge of what else
    it protects.
    No sessions, CSRF, Basic challenge or generated default user.
-4. **Every failure is a `ProblemDetail`**, rendered by the library's `ContractExceptionHandler`: framework exceptions
+4. **Every failure is a `ProblemDetail`**, rendered by the library's `ProblemDetailExceptionHandler`: framework exceptions
    keep Spring's status mapping, every response gets the configured `type` namespace and an absolute `instance`,
    validation failures carry field errors. The only API-specific piece is `OrdersDomainExceptionMapper`, a
    pattern-matching `switch` over the sealed domain exceptions that the compiler keeps exhaustive.
@@ -400,10 +401,13 @@ Write one `DomainExceptionMapper` bean that gives your business exceptions their
 everything as `ProblemDetail`. Configure the rest:
 
 ```yaml
-contract-first.server.base-path: /billing/v1
-contract-first.server.problems.type-namespace: https://billing.example.com/problems/
-contract-first.server.api-key.keys: ${BILLING_API_KEYS}       # if the contract uses an API key
-openapi.billing.base-path: ${contract-first.server.base-path} # see below
+openapi:
+  server:
+    base-path: /billing/v1
+    problem.type-namespace: https://billing.example.com/problems/
+    api-key.accepted-keys: ${BILLING_API_KEYS}       # if the contract uses an API key
+  billing:
+    base-path: ${openapi.server.base-path}           # see below
 ```
 
 The last key is the placeholder the generator puts on the interface's class-level `@RequestMapping`. Its name is
@@ -432,24 +436,33 @@ as in `examples/orders-api/server/src/test`:
 
 | Subclass of | Proves | Needs on the subclass |
 |-------------|--------|------------------------|
-| `ServerRouteCoverageSupport` | every operation is routed by Spring MVC | `@SpringBootTest`, an autowired `RequestMappingHandlerMapping` |
-| `UnauthenticatedRequestsSupport` | every operation rejects a missing credential with a conformant problem | `@SpringBootTest`, `@AutoConfigureMockMvc`, an autowired `MockMvcTester` |
-| `DocumentedResponsesCoverageSupport` | every documented response was produced by some test | `@Order(Integer.MAX_VALUE)` and the copied `junit-platform.properties`, so it runs last |
+| `AbstractRouteCoverageTest` | every operation is routed by Spring MVC | `@SpringBootTest`, an autowired `RequestMappingHandlerMapping` |
+| `AbstractUnauthenticatedRequestsTest` | every operation rejects a missing credential with a conformant problem | `@SpringBootTest`, `@AutoConfigureMockMvc`, an autowired `MockMvcTester` |
+| `AbstractDocumentedResponsesCoverageTest` | every documented response was produced by some test | `@Order(Integer.MAX_VALUE)` and the copied `junit-platform.properties`, so it runs last |
 
-In the client module subclass `ClientContractCoverageSupport` (no Spring context needed). For end-to-end, copy
+In the client module subclass `AbstractClientContractCoverageTest` (no Spring context needed). For end-to-end, copy
 `examples/orders-api/e2e`: the consumer application adds `CONTRACT.validatingInterceptor()` to the group and every real
 exchange is validated.
 
 ### Step 5. Consume it
 
 ```yaml
-spring.http.serviceclient.billing.base-url: https://billing.example.com/billing/v1
-spring.http.serviceclient.billing.connect-timeout: 2s
-spring.http.serviceclient.billing.read-timeout: 5s
-contract-first.clients.billing.auth.mode: static
-contract-first.clients.billing.auth.header-name: Authorization
-contract-first.clients.billing.auth.scheme: Bearer
-contract-first.clients.billing.auth.token: ${BILLING_TOKEN}
+spring:
+  http:
+    serviceclient:
+      billing:                                  # connection: Spring Boot's own block, keyed by group
+        base-url: https://billing.example.com/billing/v1
+        connect-timeout: 2s
+        read-timeout: 5s
+openapi:
+  clients:
+    groups:
+      billing:                                  # behaviour: the starter's block, same group key
+        auth:
+          mode: static
+          header-name: Authorization
+          scheme: Bearer
+          token: ${BILLING_TOKEN}
 ```
 
 ```java
@@ -462,6 +475,54 @@ class Finance {
 
 Other token modes (forwarding the caller's token, fetching from an identity provider, caching, retry on 401) are in
 [docs/authentication.md](docs/authentication.md).
+
+### Several clients in one application
+
+Each client is one HTTP service group, and the group name is the key in both property trees. An application that
+talks to Orders with an API key and to Billing on behalf of its caller, with one retry policy for both:
+
+```yaml
+spring:
+  http:
+    serviceclient:
+      orders:
+        base-url: https://orders.example.com/api/v1
+        read-timeout: 5s
+      billing:
+        base-url: https://billing.example.com/billing/v1
+        read-timeout: 10s
+openapi:
+  clients:
+    defaults:
+      retry:
+        max-attempts: 4                         # both groups, unless a group overrides it
+    groups:
+      orders:
+        auth:
+          token: ${ORDERS_API_KEY}              # static mode is the default
+      billing:
+        auth:
+          mode: propagate                       # forward the caller's bearer token
+          header-name: Authorization
+          scheme: Bearer
+        retry:
+          max-attempts: 2                       # overrides the default for billing only
+```
+
+```java
+@Service
+class Checkout {
+    Checkout(OrdersApi orders, InvoicesApi invoices) { … }   // each generated interface is its own bean
+}
+
+@Bean OrdersTokenProvider ordersTokenProvider(…)  { … }  // per-API token beans never clash: marker types,
+@Bean BillingTokenProvider billingTokenProvider(…) { … } // or bean names <group>TokenProvider
+```
+
+Two safeguards keep this honest. `openapi.clients.groups.<name>` for a name no `@EnableContractClient` registered
+fails startup (a misspelt group would otherwise be silently ignored); set `openapi.clients.fail-on-unknown-group=false`
+to log instead. And each client's errors come out as its own exception type when the annotation names one, or as
+`ApiException` with `group()` set, so a `catch` can tell the APIs apart.
 
 ## 7. Modules and dependencies
 
@@ -500,9 +561,9 @@ compile time, and the server never depends on the client.
 
 | Artifact (directory) | Contains | Who depends on it | Why it exists separately |
 |----------------------|----------|-------------------|--------------------------|
-| **contract-first-client-starter** (`libs/contract-first-client-starter`) | `@EnableContractClient`, `ContractClientsProperties` (the `contract-first.clients.*` namespace with `defaults`), token providers (`Static`, `Propagating`, `Caching`), `TokenContext`, the three interceptors, `ProblemResponseErrorHandler`, `ApiException` | every client module, at compile scope | Fix a bug in retries or token handling once, for every API |
-| **contract-first-server-starter** (`libs/contract-first-server-starter`) | `ContractExceptionHandler` + `DomainExceptionMapper`, `ProblemFactory`, `ContractJson` scoped to MVC converters, `RequestIdFilter`, API-key security blocks (`ApiKeySecurity`, manager, converter, entry point), `contract-first.server.*` properties | every server module, at compile scope | Problem rendering and security are correct once; a service keeps only its domain mapping and its own filter chain |
-| **contract-first-test-support** (`libs/contract-first-test-support`) | `Contract` (validator, operations, coverage record), `MockMvcContract`, `ContractValidatingInterceptor`, and the base tests `ServerRouteCoverageSupport`, `ClientContractCoverageSupport`, `DocumentedResponsesCoverageSupport`, `UnauthenticatedRequestsSupport` | server tests, e2e tests, client coverage test, at test scope | Keeps validator dependencies out of production jars; one implementation of the adapters and of the coverage tests |
+| **contract-first-client-starter** (`libs/contract-first-client-starter`) | `@EnableContractClient`, `ContractClientsPropertyBinder` (the `openapi.clients` namespace with `groups` and `defaults`), token providers (`Static`, `Propagating`, `Caching`), `TokenContext`, the three interceptors, `ProblemResponseErrorHandler`, `ApiException` | every client module, at compile scope | Fix a bug in retries or token handling once, for every API |
+| **contract-first-server-starter** (`libs/contract-first-server-starter`) | `ProblemDetailExceptionHandler` + `DomainExceptionMapper`, `ProblemFactory`, `ContractJsonMapper` scoped to MVC converters, `RequestIdFilter`, API-key security blocks (`ApiKeySecurityConfigurer`, manager, converter, entry point), `openapi.server.*` properties | every server module, at compile scope | Problem rendering and security are correct once; a service keeps only its domain mapping and its own filter chain |
+| **contract-first-test-support** (`libs/contract-first-test-support`) | `Contract` (validator, operations, coverage record), `MockMvcContractAssertions`, `ContractValidatingInterceptor`, and the base tests `AbstractRouteCoverageTest`, `AbstractClientContractCoverageTest`, `AbstractDocumentedResponsesCoverageTest`, `AbstractUnauthenticatedRequestsTest` | server tests, e2e tests, client coverage test, at test scope | Keeps validator dependencies out of production jars; one implementation of the adapters and of the coverage tests |
 | **example-orders-api-spec** (`examples/orders-api/spec`) | the YAML, `OrdersContract` constants, filtered `contract.properties` | tests of client, server and e2e | The contract must be loadable from the classpath wherever it is validated, and its version must be checkable |
 | **example-orders-api-client** (`examples/orders-api/client`) | generated models and interfaces, `OrdersClient` (the annotation), `OrdersTokenProvider`, `OrdersApiException` | consuming applications | The one artifact consumers see |
 | **example-orders-api-server** (`examples/orders-api/server`) | generated interfaces and models, controllers, domain, `OrdersDomainExceptionMapper`, a ten-line `SecurityConfig` | `example-orders-api-e2e` (tests only) | A separate deployable; its plain jar is the main artifact and the runnable fat jar is attached as `-exec` |
@@ -524,8 +585,9 @@ Everything below is a property; the client jar contains no environment-specific 
 | `default-header.<name>` | headers added to every call |
 | `ssl.bundle` | a `spring.ssl.bundle.*` name for mTLS or custom trust |
 
-**Owned by `contract-first-client-starter`** (`contract-first.clients.<group>.*`; the same keys under
-`contract-first.clients.defaults.*` apply to every client and are overridden per group):
+**Owned by `contract-first-client-starter`** (`openapi.clients.groups.<group>.*`; the same keys under
+`openapi.clients.defaults.*` apply to every client and are overridden per group; `<group>` is the HTTP service group
+name, the same key as under `spring.http.serviceclient`):
 
 | Property | Default | Meaning |
 |----------|---------|---------|
@@ -540,19 +602,19 @@ Everything below is a property; the client jar contains no environment-specific 
 | `retry.retryable-statuses` | `502,503,504` | statuses treated as transient; `IOException` is always retried |
 | `request-id.enabled` | `true` | copy the MDC request id onto outgoing calls when the caller did not set one |
 | `request-id.header-name`, `request-id.mdc-key` | `X-Request-Id`, `requestId` | |
-| `contract-first.clients.strict` | `true` | fail startup when a configured group has no `@EnableContractClient`; `false` logs a warning instead |
+| `openapi.clients.fail-on-unknown-group` | `true` | fail startup when `openapi.clients.groups.<name>` names a group no `@EnableContractClient` registered; `false` logs a warning instead |
 
 If no token can be resolved, or the provider throws, the call fails before anything is sent with
 `ClientAuthenticationException` that names the mode and the fix.
 
-**Owned by `contract-first-server-starter`** (`contract-first.server.*`):
+**Owned by `contract-first-server-starter`** (`openapi.server.*`):
 
 | Property | Default | Meaning |
 |----------|---------|---------|
-| `base-path` | `/` | prefix the generated interfaces are mounted under; feed the same value to the generator's `openapi.<name>.base-path` placeholder |
-| `problems.type-namespace` | `urn:problem-type:` | prefix of every problem `type`; a slug of the title is appended |
+| `base-path` | `/` | prefix the generated interfaces are mounted under; feed the same value to the generator's own title-derived `openapi.<title>.base-path` placeholder |
+| `problem.type-namespace` | `urn:problem-type:` | prefix of every problem `type`; a slug of the title is appended |
 | `request-id.enabled`, `request-id.header-name`, `request-id.mdc-key` | `true`, `X-Request-Id`, `requestId` | correlation filter, runs before security so even 401s carry the id |
-| `api-key.keys` | *(unset)* | accepted keys; setting it creates the API-key security beans, leaving it unset creates none |
+| `api-key.accepted-keys` | *(unset)* | keys the server accepts, comma-separated or a YAML list; setting it creates the API-key security beans, leaving it unset creates none |
 | `api-key.header-name` | `X-API-Key` | header carrying the key |
 
 ## 9. Day two: when the spec changes

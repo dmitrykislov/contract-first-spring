@@ -8,10 +8,11 @@ type `OrdersTokenProvider` so an application with several contract clients can d
 Everything below is about choosing and shaping that provider.
 
 Classes referenced below live in `io.github.dmitrykislov.contractfirst.client.auth` (`TokenProvider`,
-`TokenContext`, `CachingTokenProvider`, `ClientAuthenticationException`) and `io.github.dmitrykislov.examples.orders.client`
+`TokenContext`, `CachingTokenProvider`, `ClientAuthenticationException`), `io.github.dmitrykislov.contractfirst.client.errors`
+(`ApiException`) and `io.github.dmitrykislov.examples.orders.client`
 (`OrdersTokenProvider`, `OrdersApiException`).
 
-Settings live under `contract-first.clients.orders.auth` (and `contract-first.clients.defaults.auth` for values shared by every client):
+Settings live under `openapi.clients.groups.orders.auth` (and `openapi.clients.defaults.auth` for values shared by every client):
 
 | Property | Default | Meaning |
 |----------|---------|---------|
@@ -37,11 +38,12 @@ spring:
     serviceclient:
       orders:
         base-url: https://orders.example.com/api/v1
-contract-first:
+openapi:
   clients:
-    orders:
-      auth:
-        token: ${ORDERS_API_KEY}
+    groups:
+      orders:
+        auth:
+          token: ${ORDERS_API_KEY}
 ```
 
 ```java
@@ -57,7 +59,7 @@ class Checkout {
 ```
 
 Keep the secret out of files: pass `ORDERS_API_KEY` as an environment variable, or on Kubernetes mount the secret
-as a file and import it as a config tree, which maps `/run/secrets/contract-first.clients.orders.auth.token` to the property:
+as a file and import it as a config tree, which maps `/run/secrets/openapi.clients.groups.orders.auth.token` to the property:
 
 ```yaml
 spring:
@@ -70,13 +72,14 @@ spring:
 Same mode, different header. The client inserts the space between scheme and token.
 
 ```yaml
-contract-first:
+openapi:
   clients:
-    orders:
-      auth:
-        header-name: Authorization
-        scheme: Bearer
-        token: ${ORDERS_BEARER_TOKEN}
+    groups:
+      orders:
+        auth:
+          header-name: Authorization
+          scheme: Bearer
+          token: ${ORDERS_BEARER_TOKEN}
 ```
 
 Sends `Authorization: Bearer <token>`.
@@ -87,11 +90,12 @@ A gateway or BFF that calls Orders on behalf of whoever called it. No token in c
 same header from the servlet request being handled on the current thread.
 
 ```yaml
-contract-first:
+openapi:
   clients:
-    orders:
-      auth:
-        mode: propagate
+    groups:
+      orders:
+        auth:
+          mode: propagate
 ```
 
 ```java
@@ -111,13 +115,14 @@ If the incoming header carries a scheme, configure the same scheme so it is stri
 the way out instead of being doubled:
 
 ```yaml
-contract-first:
+openapi:
   clients:
-    orders:
-      auth:
-        mode: propagate
-        header-name: Authorization
-        scheme: Bearer      # incoming "Bearer abc" or "bearer abc" -> outgoing "Bearer abc"
+    groups:
+      orders:
+        auth:
+          mode: propagate
+          header-name: Authorization
+          scheme: Bearer      # incoming "Bearer abc" or "bearer abc" -> outgoing "Bearer abc"
 ```
 
 The incoming header name is always the configured `header-name`. If your inbound and outbound headers differ, use a
@@ -169,11 +174,12 @@ a different identity for one block.
 Register your own `OrdersTokenProvider` bean; the client calls it on every request.
 
 ```yaml
-contract-first:
+openapi:
   clients:
-    orders:
-      auth:
-        mode: provider
+    groups:
+      orders:
+        auth:
+          mode: provider
 ```
 
 ### 5a. OAuth2 client credentials with Spring Security
@@ -196,13 +202,14 @@ spring:
         provider:
           corp-idp:
             token-uri: https://idp.example.com/oauth2/token
-contract-first:
+openapi:
   clients:
-    orders:
-      auth:
-        mode: provider
-        header-name: Authorization
-        scheme: Bearer
+    groups:
+      orders:
+        auth:
+          mode: provider
+          header-name: Authorization
+          scheme: Bearer
 ```
 
 ```java
@@ -306,7 +313,7 @@ Mostly machine identity, occasionally on behalf of a caller:
 
 ```java
 @Bean
-OrdersTokenProvider ordersTokenProvider(@Value("${contract-first.clients.orders.auth.token}") String serviceKey) {
+OrdersTokenProvider ordersTokenProvider(@Value("${openapi.clients.groups.orders.auth.token}") String serviceKey) {
     return () -> TokenContext.current().or(() -> Optional.of(serviceKey));
 }
 ```
@@ -420,7 +427,7 @@ In a consumer's tests use static mode with a dummy value, or a `@TestConfigurati
 ```java
 @SpringBootTest(properties = {
         "spring.http.serviceclient.orders.base-url=http://orders.test/api/v1",
-        "contract-first.clients.orders.auth.token=test-key"})
+        "openapi.clients.groups.orders.auth.token=test-key"})
 class CheckoutTest { ... }
 ```
 

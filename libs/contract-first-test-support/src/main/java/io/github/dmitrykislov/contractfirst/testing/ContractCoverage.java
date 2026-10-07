@@ -1,5 +1,7 @@
 package io.github.dmitrykislov.contractfirst.testing;
 
+import io.github.dmitrykislov.contractfirst.testing.restclient.ContractValidatingInterceptor;
+import io.github.dmitrykislov.contractfirst.testing.mockmvc.MockMvcContractAssertions;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -8,7 +10,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Records every (operation, response status) pair that passed through {@link MockMvcContract} or
+ * Records every (operation, response status) pair that passed through {@link MockMvcContractAssertions} or
  * {@link ContractValidatingInterceptor} for one {@link Contract}, so a final test can prove that each
  * response the contract documents was actually exercised, not merely declared.
  */
@@ -21,7 +23,8 @@ public final class ContractCoverage {
         this.contract = contract;
     }
 
-    void record(String httpMethod, String requestPath, int status) {
+    /** Called by the MockMvc and RestClient adapters for every validated exchange. */
+    public void record(String httpMethod, String requestPath, int status) {
         contract.matching(httpMethod, requestPath)
                 .ifPresent(op -> observed.computeIfAbsent(op, k -> ConcurrentHashMap.newKeySet()).add(status));
     }

@@ -1,7 +1,7 @@
 package io.github.dmitrykislov.contractfirst.server.security;
 
-import io.github.dmitrykislov.contractfirst.server.ContractJson;
-import io.github.dmitrykislov.contractfirst.server.ProblemFactory;
+import io.github.dmitrykislov.contractfirst.server.json.ContractJsonMapper;
+import io.github.dmitrykislov.contractfirst.server.problem.ProblemFactory;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -15,11 +15,11 @@ import org.springframework.security.web.AuthenticationEntryPoint;
 /** Renders authentication failures as a 401 {@code ProblemDetail}, so even rejected requests are spec-conformant. */
 public final class ProblemAuthenticationEntryPoint implements AuthenticationEntryPoint {
 
-    private final ContractJson json;
+    private final ContractJsonMapper json;
     private final ProblemFactory problems;
     private final String headerName;
 
-    public ProblemAuthenticationEntryPoint(ContractJson json, ProblemFactory problems, String headerName) {
+    public ProblemAuthenticationEntryPoint(ContractJsonMapper json, ProblemFactory problems, String headerName) {
         this.json = json;
         this.problems = problems;
         this.headerName = headerName;

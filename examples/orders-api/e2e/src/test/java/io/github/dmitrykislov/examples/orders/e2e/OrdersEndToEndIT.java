@@ -6,7 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import io.github.dmitrykislov.examples.orders.client.OrdersApiException;
 import io.github.dmitrykislov.contractfirst.client.auth.ClientAuthenticationException;
 import io.github.dmitrykislov.contractfirst.client.auth.TokenContext;
-import io.github.dmitrykislov.contractfirst.testing.ContractValidatingInterceptor;
+import io.github.dmitrykislov.contractfirst.testing.restclient.ContractValidatingInterceptor;
 import io.github.dmitrykislov.examples.orders.client.api.CatalogApi;
 import io.github.dmitrykislov.examples.orders.client.api.OrdersApi;
 import io.github.dmitrykislov.examples.orders.client.model.Address;
@@ -48,7 +48,7 @@ import org.springframework.http.ResponseEntity;
  * contract on the way out and on the way back in.
  */
 @SpringBootTest(classes = OrdersServerApplication.class, webEnvironment = WebEnvironment.RANDOM_PORT, properties = {
-        "contract-first.server.api-key.keys=e2e-key",
+        "openapi.server.api-key.accepted-keys=e2e-key",
         // The server JVM also has the client jar on its classpath; keep its context free of client beans.
         "spring.autoconfigure.exclude=io.github.dmitrykislov.examples.orders.client.OrdersClient"
 })
@@ -87,7 +87,7 @@ class OrdersEndToEndIT {
                         "spring.http.serviceclient.orders.base-url=http://localhost:" + port + "/api/v1",
                         "spring.http.serviceclient.orders.connect-timeout=2s",
                         "spring.http.serviceclient.orders.read-timeout=5s",
-                        "contract-first.clients.orders.auth.token=" + apiKey)
+                        "openapi.clients.groups.orders.auth.token=" + apiKey)
                 .run();
     }
 
@@ -259,7 +259,7 @@ class OrdersEndToEndIT {
         try (ConfigurableApplicationContext propagating = new SpringApplicationBuilder(ContractValidatingClientApplication.class)
                 .web(WebApplicationType.NONE)
                 .properties("spring.http.serviceclient.orders.base-url=http://localhost:" + port + "/api/v1",
-                        "contract-first.clients.orders.auth.mode=propagate")
+                        "openapi.clients.groups.orders.auth.mode=propagate")
                 .run()) {
             CatalogApi propagatingCatalog = propagating.getBean(CatalogApi.class);
 
@@ -280,7 +280,7 @@ class OrdersEndToEndIT {
         try (ConfigurableApplicationContext providing = new SpringApplicationBuilder(TokenFetchingClientApplication.class)
                 .web(WebApplicationType.NONE)
                 .properties("spring.http.serviceclient.orders.base-url=http://localhost:" + port + "/api/v1",
-                        "contract-first.clients.orders.auth.mode=provider",
+                        "openapi.clients.groups.orders.auth.mode=provider",
                         "e2e.vault.token=e2e-key")
                 .run()) {
             CatalogApi providingCatalog = providing.getBean(CatalogApi.class);

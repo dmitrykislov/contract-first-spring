@@ -9,7 +9,7 @@ import io.github.dmitrykislov.examples.orders.client.api.OrdersApi;
  * Spring Boot application that depends on this jar can inject the generated interfaces.
  *
  * <p>Configure with {@code spring.http.serviceclient.orders.*} (base URL, timeouts, TLS) and
- * {@code contract-first.clients.orders.*} (auth, retry, request-id); see the README.
+ * {@code openapi.clients.groups.orders.*} (auth, retry, request-id); see the README.
  */
 @EnableContractClient(
         group = OrdersClient.GROUP,
@@ -18,6 +18,6 @@ import io.github.dmitrykislov.examples.orders.client.api.OrdersApi;
         tokenProvider = OrdersTokenProvider.class)
 public class OrdersClient {
 
-    /** Name of the HTTP service group; key under {@code spring.http.serviceclient} and {@code contract-first.clients}. */
+    /** Name of the HTTP service group; key under {@code spring.http.serviceclient} and {@code openapi.clients}. */
     public static final String GROUP = "orders";
 }

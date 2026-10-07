@@ -1,5 +1,6 @@
 package io.github.dmitrykislov.contractfirst.testing;
 
+import io.github.dmitrykislov.contractfirst.testing.restclient.ContractValidatingInterceptor;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 

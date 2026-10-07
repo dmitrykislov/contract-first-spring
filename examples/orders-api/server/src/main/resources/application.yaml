@@ -8,20 +8,17 @@ server:
     include-message: never
     include-stacktrace: never
 
-contract-first:
-  server:
-    base-path: /api/v1                                  # path part of servers[0].url in the contract
-    problems:
+openapi:
+  server:                                   # contract-first-server-starter
+    base-path: /api/v1                      # path part of servers[0].url in the contract
+    problem:
       type-namespace: https://orders.example.com/problems/
     api-key:
-      # Static demo keys. In a real deployment inject these from a secret store.
-      keys:
+      accepted-keys:                        # static demo keys; in a real deployment inject from a secret store
         - dev-api-key-1
         - dev-api-key-2
-
-openapi:
-  orders:
-    base-path: ${contract-first.server.base-path}       # the generated @RequestMapping placeholder reads this key
+  orders:                                   # the generator's own placeholder, derived from the spec title
+    base-path: ${openapi.server.base-path}
 
 logging:
   level:

@@ -1,2 +1,2 @@
-io.github.dmitrykislov.contractfirst.server.ContractServerAutoConfiguration
-io.github.dmitrykislov.contractfirst.server.security.ApiKeySecurityAutoConfiguration
+io.github.dmitrykislov.contractfirst.server.autoconfigure.ContractServerAutoConfiguration
+io.github.dmitrykislov.contractfirst.server.autoconfigure.ApiKeySecurityAutoConfiguration

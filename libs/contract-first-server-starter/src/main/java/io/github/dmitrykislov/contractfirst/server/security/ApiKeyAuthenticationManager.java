@@ -18,7 +18,7 @@ public final class ApiKeyAuthenticationManager implements AuthenticationManager 
 
     public ApiKeyAuthenticationManager(Set<String> apiKeys) {
         if (apiKeys == null || apiKeys.isEmpty()) {
-            throw new IllegalArgumentException("contract-first.server.api-key.keys must contain at least one key");
+            throw new IllegalArgumentException("openapi.server.api-key.accepted-keys must contain at least one key");
         }
         this.apiKeys = Set.copyOf(apiKeys);
     }

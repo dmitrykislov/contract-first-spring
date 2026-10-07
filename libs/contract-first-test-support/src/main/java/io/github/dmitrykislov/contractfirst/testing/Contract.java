@@ -1,5 +1,7 @@
 package io.github.dmitrykislov.contractfirst.testing;
 
+import io.github.dmitrykislov.contractfirst.testing.restclient.ContractValidatingInterceptor;
+import io.github.dmitrykislov.contractfirst.testing.mockmvc.MockMvcContractAssertions;
 import com.atlassian.oai.validator.OpenApiInteractionValidator;
 import io.swagger.parser.OpenAPIParser;
 import io.swagger.v3.oas.models.OpenAPI;
@@ -103,8 +105,8 @@ public final class Contract {
     }
 
     /** Assertions for MockMvc results against this contract. */
-    public MockMvcContract mockMvc() {
-        return new MockMvcContract(this);
+    public MockMvcContractAssertions mockMvc() {
+        return new MockMvcContractAssertions(this);
     }
 
     /** A {@code RestClient} interceptor that validates every real exchange against this contract. */

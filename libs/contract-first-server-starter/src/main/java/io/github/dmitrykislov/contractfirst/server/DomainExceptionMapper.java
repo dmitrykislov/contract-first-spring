@@ -1,10 +1,11 @@
 package io.github.dmitrykislov.contractfirst.server;
 
+import io.github.dmitrykislov.contractfirst.server.problem.ProblemDetailExceptionHandler;
 import java.util.Optional;
 import org.springframework.http.HttpStatusCode;
 
 /**
- * Tells {@link ContractExceptionHandler} which HTTP status a domain exception maps to. Register one
+ * Tells {@link ProblemDetailExceptionHandler} which HTTP status a domain exception maps to. Register one
  * bean per API; mappers are consulted in {@code @Order}, first non-empty answer wins. The exception's
  * message becomes the problem's {@code detail}, the status's reason phrase its {@code title}.
  *

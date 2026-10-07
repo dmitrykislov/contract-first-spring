@@ -1,5 +1,6 @@
 package io.github.dmitrykislov.examples.orders.server.web;
 
+import io.github.dmitrykislov.contractfirst.server.problem.ProblemDetailExceptionHandler;
 import io.github.dmitrykislov.contractfirst.server.DomainExceptionMapper;
 import io.github.dmitrykislov.examples.orders.server.domain.OrdersDomainException;
 import java.util.Optional;
@@ -10,7 +11,7 @@ import org.springframework.stereotype.Component;
 /**
  * The one piece of error handling that belongs to this API: which status each business failure gets.
  * The sealed hierarchy keeps the switch exhaustive, so a new failure type is a compile error until it
- * has a status. Rendering as {@code ProblemDetail} is done by the shared {@code ContractExceptionHandler}.
+ * has a status. Rendering as {@code ProblemDetail} is done by the shared {@code ProblemDetailExceptionHandler}.
  */
 @Component
 public class OrdersDomainExceptionMapper implements DomainExceptionMapper {

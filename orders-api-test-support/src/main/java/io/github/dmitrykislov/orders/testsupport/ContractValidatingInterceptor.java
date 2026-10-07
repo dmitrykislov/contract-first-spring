@@ -49,6 +49,7 @@ public final class ContractValidatingInterceptor implements ClientHttpRequestInt
         Request contractRequest = toRequest(request, body);
         ClientHttpResponse response = new BufferedResponse(execution.execute(request, body));
         ValidationReport report = validator.validate(contractRequest, toResponse(response));
+        ContractCoverage.record(request.getMethod().name(), request.getURI().getPath(), response.getStatusCode().value());
         if (report.hasErrors()) {
             throw new ContractViolationException(request, response, report);
         }

@@ -427,6 +427,15 @@ class OrdersApiConformanceTest extends ApiTestBase {
         }
 
         @Test
+        void returns404ForUnknownOrder() {
+            MvcTestResult result = mvc.patch().uri(url("/orders/{id}"), randomId()).headers(authenticated())
+                    .contentType(MediaType.APPLICATION_JSON).content(toJson(new OrderPatch().notes("x"))).exchange();
+
+            assertExchangeConforms(result);
+            assertThat(result).hasStatus(HttpStatus.NOT_FOUND);
+        }
+
+        @Test
         void returns409WhenOrderIsCancelled() {
             Order created = createOrder();
             orderService.cancel(created.getId(), null);
@@ -478,6 +487,14 @@ class OrdersApiConformanceTest extends ApiTestBase {
         }
 
         @Test
+        void returns400ForNonUuidPath() {
+            MvcTestResult result = mvc.delete().uri(url("/orders/not-a-uuid")).headers(authenticated()).exchange();
+
+            assertResponseConforms(result);
+            assertThat(result).hasStatus(HttpStatus.BAD_REQUEST);
+        }
+
+        @Test
         void returns409WhenAlreadyShipped() {
             Order created = createOrder();
             orderService.forceState(created.getId(), OrderState.SHIPPED);
@@ -510,6 +527,22 @@ class OrdersApiConformanceTest extends ApiTestBase {
             assertExchangeConforms(result);
             assertThat(result).hasStatusOk();
             assertThat(fromJson(result, Order.class).getStatus()).isEqualTo(OrderStatus.SUBMITTED);
+        }
+
+        @Test
+        void returns404ForUnknownOrder() {
+            MvcTestResult result = mvc.post().uri(url("/orders/{id}/submit"), randomId()).headers(authenticated()).exchange();
+
+            assertExchangeConforms(result);
+            assertThat(result).hasStatus(HttpStatus.NOT_FOUND);
+        }
+
+        @Test
+        void returns400ForNonUuidPath() {
+            MvcTestResult result = mvc.post().uri(url("/orders/not-a-uuid/submit")).headers(authenticated()).exchange();
+
+            assertResponseConforms(result);
+            assertThat(result).hasStatus(HttpStatus.BAD_REQUEST);
         }
 
         @Test

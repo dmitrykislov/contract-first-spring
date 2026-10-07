@@ -42,6 +42,8 @@ public final class MockMvcContract {
     }
 
     private static void assertNoErrors(ValidationReport report, MvcTestResult result) {
+        ContractCoverage.record(result.getRequest().getMethod(), result.getRequest().getRequestURI(),
+                result.getResponse().getStatus());
         if (report.hasErrors()) {
             Assertions.fail("%s %s -> %d does not conform to %s:%n%s".formatted(
                     result.getRequest().getMethod(), result.getRequest().getRequestURI(),

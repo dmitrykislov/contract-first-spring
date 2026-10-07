@@ -179,7 +179,7 @@ sequenceDiagram
 **How to read it.**
 
 1. **The proxy** is created by Spring Framework's HTTP service support from the generated interface. Nobody writes
-   it. The client jar's one hand-written class, `OrdersClient`, carries `@EnableContractClient(group = "orders",
+   it. The client jar's hand-written entry point, `OrdersClient`, carries `@EnableContractClient(group = "orders",
    basePackageClasses = OrdersApi.class, …)`, which registers all generated interfaces in an *HTTP service group*
    named `orders` and wires everything below.
 2. **The `RestClient` underneath** is built by Spring Boot from `spring.http.serviceclient.orders.*`: base URL,
@@ -239,7 +239,8 @@ flowchart TB
 3. **Security is Spring Security**, assembled from `contract-first-server-support` building blocks that exist only
    when `contract-first.server.api-key.keys` is set: an `AuthenticationFilter` converting the `X-API-Key` header, a
    constant-time `ApiKeyAuthenticationManager`, and an entry point rendering 401 as a `ProblemDetail`. The service's
-   own `SecurityConfig` is one line, `apiKey.configure(http).build()`, and stays in charge of what else it protects.
+   own `SecurityConfig` reduces to one statement, `apiKey.configure(http).build()`, and stays in charge of what else
+   it protects.
    No sessions, CSRF, Basic challenge or generated default user.
 4. **Every failure is a `ProblemDetail`**, rendered by the library's `ContractExceptionHandler`: framework exceptions
    keep Spring's status mapping, every response gets the configured `type` namespace and an absolute `instance`,
@@ -299,7 +300,7 @@ billing-api-spec/
 ├── pom.xml                                   ← copy; artifactId billing-api-spec
 └── src/main/
     ├── resources/openapi/billing-api.yaml    ← the document you received
-    ├── resources-filtered/contract.properties← copy unchanged
+    ├── resources-filtered/contract.properties← copy unchanged (the copied POM filters it)
     └── java/…/billing/spec/BillingContract.java
 ```
 
@@ -307,7 +308,6 @@ billing-api-spec/
 public final class BillingContract {
     public static final String RESOURCE = "openapi/billing-api.yaml";
     public static final String BASE_PATH = "/billing/v1";     // the path part of servers[0].url
-    public static final String CLIENT_GROUP = "billing";
 }
 ```
 
@@ -380,8 +380,12 @@ everything as `ProblemDetail`. Configure the rest:
 contract-first.server.base-path: /billing/v1
 contract-first.server.problems.type-namespace: https://billing.example.com/problems/
 contract-first.server.api-key.keys: ${BILLING_API_KEYS}       # if the contract uses an API key
-openapi.billing.base-path: ${contract-first.server.base-path} # the generated @RequestMapping placeholder
+openapi.billing.base-path: ${contract-first.server.base-path} # see below
 ```
+
+The last key is the placeholder the generator puts on the interface's class-level `@RequestMapping`. Its name is
+derived from the spec's `info.title` (`Orders API` became `openapi.orders.base-path`); read it off the generated
+interface after the first build rather than guessing.
 
 For an API key, add a `SecurityFilterChain` bean that returns `apiKey.configure(http).build()`, as
 `orders-api-server`'s `SecurityConfig` does. For OAuth2 bearer tokens use Spring Security's resource-server support
@@ -400,12 +404,18 @@ public abstract class ApiTestBase {
 ```
 
 Write one MockMvc test per operation and per error path, calling `assertExchangeConforms` (or
-`assertResponseConforms` when the request is deliberately invalid). Then three subclasses, each a few lines:
-`ServerRouteCoverageSupport` (every operation is routed), `UnauthenticatedRequestsSupport` (every operation rejects a
-missing credential with a conformant problem) and, with `@Order(Integer.MAX_VALUE)` plus the copied
-`junit-platform.properties`, `DocumentedResponsesCoverageSupport` (every documented response was produced by some
-test). In the client module subclass `ClientContractCoverageSupport`. For end-to-end, copy `orders-api-e2e`: the
-consumer application adds `CONTRACT.validatingInterceptor()` to the group and every real exchange is validated.
+`assertResponseConforms` when the request is deliberately invalid). Then three subclasses, each a few lines, exactly
+as in `orders-api-server/src/test`:
+
+| Subclass of | Proves | Needs on the subclass |
+|-------------|--------|------------------------|
+| `ServerRouteCoverageSupport` | every operation is routed by Spring MVC | `@SpringBootTest`, an autowired `RequestMappingHandlerMapping` |
+| `UnauthenticatedRequestsSupport` | every operation rejects a missing credential with a conformant problem | `@SpringBootTest`, `@AutoConfigureMockMvc`, an autowired `MockMvcTester` |
+| `DocumentedResponsesCoverageSupport` | every documented response was produced by some test | `@Order(Integer.MAX_VALUE)` and the copied `junit-platform.properties`, so it runs last |
+
+In the client module subclass `ClientContractCoverageSupport` (no Spring context needed). For end-to-end, copy
+`orders-api-e2e`: the consumer application adds `CONTRACT.validatingInterceptor()` to the group and every real
+exchange is validated.
 
 ### Step 5. Consume it
 
@@ -469,7 +479,7 @@ compile time, and the server never depends on the client.
 |--------|----------|-------------------|--------------------------|
 | **contract-first-client-support** | `@EnableContractClient`, `ContractClientsProperties` (the `contract-first.clients.*` namespace with `defaults`), token providers (`Static`, `Propagating`, `Caching`), `TokenContext`, the three interceptors, `ProblemResponseErrorHandler`, `ApiException` | every client module, at compile scope | Fix a bug in retries or token handling once, for every API |
 | **contract-first-server-support** | `ContractExceptionHandler` + `DomainExceptionMapper`, `ProblemFactory`, `ContractJson` scoped to MVC converters, `RequestIdFilter`, API-key security blocks (`ApiKeySecurity`, manager, converter, entry point), `contract-first.server.*` properties | every server module, at compile scope | Problem rendering and security are correct once; a service keeps only its domain mapping and its own filter chain |
-| **contract-first-test-support** | `Contract`, `MockMvcContract`, `ContractValidatingInterceptor`, `ContractOperation`, `ContractCoverage` | server tests, e2e tests, client coverage test, at test scope | Keeps validator dependencies out of production jars; one implementation of the MockMvc and RestClient adapters |
+| **contract-first-test-support** | `Contract` (validator, operations, coverage record), `MockMvcContract`, `ContractValidatingInterceptor`, and the base tests `ServerRouteCoverageSupport`, `ClientContractCoverageSupport`, `DocumentedResponsesCoverageSupport`, `UnauthenticatedRequestsSupport` | server tests, e2e tests, client coverage test, at test scope | Keeps validator dependencies out of production jars; one implementation of the adapters and of the coverage tests |
 | **orders-api-spec** | the YAML, `OrdersContract` constants, filtered `contract.properties` | tests of client, server and e2e | The contract must be loadable from the classpath wherever it is validated, and its version must be checkable |
 | **orders-api-client** | generated models and interfaces, `OrdersClient` (the annotation), `OrdersTokenProvider`, `OrdersApiException` | consuming applications | The one artifact consumers see |
 | **orders-api-server** | generated interfaces and models, controllers, domain, `OrdersDomainExceptionMapper`, a ten-line `SecurityConfig` | `orders-api-e2e` (tests only) | A separate deployable; its plain jar is the main artifact and the runnable fat jar is attached as `-exec` |
@@ -489,7 +499,7 @@ Everything below is a property; the client jar contains no environment-specific 
 | `connect-timeout`, `read-timeout` | durations, e.g. `2s` |
 | `redirects` | `follow` or `dont-follow` |
 | `default-header.<name>` | headers added to every call |
-| `ssl.bundle` | an `spring.ssl.bundle.*` name for mTLS or custom trust |
+| `ssl.bundle` | a `spring.ssl.bundle.*` name for mTLS or custom trust |
 
 **Owned by `contract-first-client-support`** (`contract-first.clients.<group>.*`; the same keys under
 `contract-first.clients.defaults.*` apply to every client and are overridden per group):
@@ -545,15 +555,21 @@ version (a lint test enforces this).
 
 ```bash
 mvn verify                                 # generate, compile, unit + MockMvc tests (Surefire), end-to-end (Failsafe)
-mvn test                                   # same without the end-to-end suite
+mvn test                                   # unit + MockMvc tests only (no end-to-end suite)
 mvn generate-sources                       # only regenerate; look in */target/generated-sources/openapi
 mvn -pl orders-api-client -am install      # install the client jar locally
 java -jar orders-api-server/target/orders-api-server-1.0.0-SNAPSHOT-exec.jar
 ```
 
-Requirements: Java 25 and Maven 3.9 or later (enforced). The first build downloads Spring Boot 4.1.1 and OpenAPI
-Generator 7.26.0, about 40 MB. JaCoCo reports land in `*/target/site/jacoco`. Dependabot and CodeQL are configured
-under `.github/`. Generated sources live under `target/` and are never committed.
+Requirements: Java 25 and Maven 3.9 or later (enforced). The three libraries target Spring Boot 4.1 and Java 25
+(`TokenContext` uses `ScopedValue`); consumers on older platforms cannot use them. The first build downloads Spring
+Boot 4.1.1 and OpenAPI Generator 7.26.0, about 40 MB. `mvn verify -DskipITs` skips the end-to-end suite. JaCoCo
+reports land in `*/target/site/jacoco`. Dependabot and CodeQL are configured under `.github/`. Generated sources live
+under `target/` and are never committed.
+
+Compatibility policy for the libraries: once several client jars depend on `contract-first-client-support`, Maven
+resolves one version for all of them, so the libraries follow semantic versioning with no breaking change inside a
+major. A binary-compatibility check (japicmp) is to be added to CI against the first release, `1.0.0`.
 
 The sample uses `example.com` hosts and demo API keys in `application.yaml`; the `io.github.dmitrykislov`
 coordinates are the only repository-specific detail.

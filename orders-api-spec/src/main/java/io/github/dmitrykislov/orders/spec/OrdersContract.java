@@ -12,8 +12,5 @@ public final class OrdersContract {
     /** Path part of {@code servers[0].url}; every operation path is relative to it. */
     public static final String BASE_PATH = "/api/v1";
 
-    /** Name of the HTTP service group the client auto-configuration registers. */
-    public static final String CLIENT_GROUP = "orders";
-
     private OrdersContract() {}
 }

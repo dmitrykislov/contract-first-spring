@@ -274,6 +274,11 @@ what the **contract** expects, for the whole response. And the coverage test tur
 build failure whenever a new response code is added to the YAML without a test. Running the suite today exercises
 all 8 operations and all 38 documented responses.
 
+The suite was also checked by mutation: eleven defects were injected one at a time (201 turned into 200, field
+errors dropped from problems, a controller left unregistered, `null`s serialised on either side, idempotent replay
+removed, the API-key check disabled, PATCH ignoring a field, a response code removed from the spec, the token sent on
+the wrong header, problems left undecoded). Every one failed the build.
+
 ## 7. Modules and who depends on what
 
 ```mermaid

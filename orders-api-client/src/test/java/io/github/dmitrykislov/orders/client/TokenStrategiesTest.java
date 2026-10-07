@@ -50,7 +50,7 @@ class TokenStrategiesTest {
     class StaticMode {
 
         @Test
-        void sendsConfiguredTokenWithOptionalPrefixOnConfiguredHeader() {
+        void sendsConfiguredTokenWithOptionalSchemeOnConfiguredHeader() {
             runner.withPropertyValues(
                     "orders.client.auth.token=abc123",
                     "orders.client.auth.header-name=Authorization",
